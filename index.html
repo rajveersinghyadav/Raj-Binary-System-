@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NexBar Multi-Exchange Forex & Crypto Precision System</title>
+    <title>NexBar Multi-Asset Fresh Merge System</title>
     <style>
         * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         body { background-color: #0b0e11; color: #eaecef; margin: 0; padding: 15px; display: flex; justify-content: center; }
@@ -44,14 +44,14 @@
 <body>
 
 <div class="container">
-    <select id="asset-selector" class="asset-select" onchange="changeAsset()">
-        <optgroup label="Crypto Assets">
+    <select id="asset-selector" class="asset-select" onchange="switchAssetWithReload()">
+        <optgroup label="Crypto Assets (Binance + Delta)">
             <option value="BTCUSDT">Bitcoin (BTC/USDT)</option>
             <option value="ETHUSDT">Ethereum (ETH/USDT)</option>
             <option value="SOLUSDT">Solana (SOL/USDT)</option>
             <option value="CRYPTO_IDX">Crypto IDX</option>
         </optgroup>
-        <optgroup label="Forex Pairs (Merged Binance + Yahoo Feed)">
+        <optgroup label="Forex Pairs (Binance + Yahoo Interbank)">
             <option value="EURUSD">EUR / USD</option>
             <option value="AUDCAD">AUD / CAD</option>
             <option value="AUDCHF">AUD / CHF</option>
@@ -61,19 +61,19 @@
     </select>
 
     <div class="badges">
-        <span id="binance-status" class="badge off">Binance OFF</span>
-        <span id="yahoo-status" class="badge off">Yahoo FX OFF</span>
+        <span id="source1-status" class="badge off">Source 1 OFF</span>
+        <span id="source2-status" class="badge off">Source 2 OFF</span>
     </div>
 
-    <div id="price" class="price">0.00000</div>
+    <div id="price" class="price">0.00</div>
 
     <div class="timer-box">
         <div>Clock: <span id="timer" class="timer-val">00:59</span></div>
-        <div id="phase-text" class="phase-text" style="color:#f0b90b;">System Active...</div>
+        <div id="phase-text" class="phase-text" style="color:#f0b90b;">System Initializing...</div>
     </div>
 
     <div id="signal-card" class="signal-card">
-        <div id="status-tag" class="status-tag" style="background:#f0b90b; color:#000;">MERGING ORDERBOOKS</div>
+        <div id="status-tag" class="status-tag" style="background:#f0b90b; color:#000;">FRESH DATA CONNECTING</div>
         <div id="signal" class="signal-type WAITING">ANALYZING...</div>
         <div>Confidence: <b id="confidence" style="color:#fff;">50%</b></div>
 
@@ -91,130 +91,129 @@
 </div>
 
 <script>
-    let currentAsset = 'EURUSD';
-    let binanceWs = null, yahooInterval = null;
+    // URL Parameter Parsing to Keep Asset Selected on Hard Refresh
+    const urlParams = new URLSearchParams(window.location.search);
+    let currentAsset = urlParams.get('asset') || 'BTCUSDT';
     
-    // Combined Vol Accumulators
-    let binanceBids = 0, binanceAsks = 0;
-    let yahooBids = 0, yahooAsks = 0;
-    let tickCountBuy = 0, tickCountSell = 0;
-    
-    let lockedSignalData = null;
-    let lastYahooPrice = 0;
+    document.getElementById('asset-selector').value = currentAsset;
 
-    // Config Mapping for Asset Precision & Routing
-    const assetConfig = {
-        'BTCUSDT': { binanceSymbol: 'btcusdt', yahooSymbol: 'BTC-USD', decimals: 2 },
-        'ETHUSDT': { binanceSymbol: 'ethusdt', yahooSymbol: 'ETH-USD', decimals: 2 },
-        'SOLUSDT': { binanceSymbol: 'solusdt', yahooSymbol: 'SOL-USD', decimals: 2 },
-        'CRYPTO_IDX': { binanceSymbol: 'btcusdt', yahooSymbol: 'BTC-USD', decimals: 2 },
-        'EURUSD': { binanceSymbol: 'eurusdt', yahooSymbol: 'EURUSD=X', decimals: 5 },
-        'AUDCAD': { binanceSymbol: 'audusdt', yahooSymbol: 'AUDCAD=X', decimals: 5 },
-        'AUDCHF': { binanceSymbol: 'audusdt', yahooSymbol: 'AUDCHF=X', decimals: 5 },
-        'AUDJPY': { binanceSymbol: 'audusdt', yahooSymbol: 'AUDJPY=X', decimals: 3 },
-        'AUDUSD': { binanceSymbol: 'audusdt', yahooSymbol: 'AUDUSD=X', decimals: 5 }
+    function switchAssetWithReload() {
+        const selected = document.getElementById('asset-selector').value;
+        // Hard Reload with New Asset URL Parameter
+        window.location.href = window.location.pathname + '?asset=' + selected;
+    }
+
+    let wsSource1 = null, wsSource2 = null, yahooInterval = null;
+    let bids1 = 0, asks1 = 0;
+    let bids2 = 0, asks2 = 0;
+    let tickBuy = 0, tickSell = 0;
+    let lastPrice = 0;
+    let lockedSignalData = null;
+
+    // Asset Routing & Precision Registry
+    const assetRegistry = {
+        'BTCUSDT': { type: 'crypto', binanceSymbol: 'btcusdt', deltaSymbol: 'BTC_USDT', decimals: 2 },
+        'ETHUSDT': { type: 'crypto', binanceSymbol: 'ethusdt', deltaSymbol: 'ETH_USDT', decimals: 2 },
+        'SOLUSDT': { type: 'crypto', binanceSymbol: 'solusdt', deltaSymbol: 'SOL_USDT', decimals: 2 },
+        'CRYPTO_IDX': { type: 'crypto', binanceSymbol: 'btcusdt', deltaSymbol: 'BTC_USDT', decimals: 2 },
+        'EURUSD': { type: 'forex', binanceSymbol: 'eurusdt', yahooSymbol: 'EURUSD=X', decimals: 5 },
+        'AUDCAD': { type: 'forex', binanceSymbol: 'audusdt', yahooSymbol: 'AUDCAD=X', decimals: 5 },
+        'AUDCHF': { type: 'forex', binanceSymbol: 'audusdt', yahooSymbol: 'AUDCHF=X', decimals: 5 },
+        'AUDJPY': { type: 'forex', binanceSymbol: 'audusdt', yahooSymbol: 'AUDJPY=X', decimals: 3 },
+        'AUDUSD': { type: 'forex', binanceSymbol: 'audusdt', yahooSymbol: 'AUDUSD=X', decimals: 5 }
     };
 
-    function initDataStreams() {
-        if (binanceWs) binanceWs.close();
-        if (yahooInterval) clearInterval(yahooInterval);
+    const config = assetRegistry[currentAsset] || assetRegistry['BTCUSDT'];
 
-        resetAccumulators();
+    function startFreshStreams() {
         document.getElementById('price').innerText = "CONNECTING...";
 
-        document.getElementById('binance-status').className = 'badge off';
-        document.getElementById('binance-status').innerText = 'Binance OFF';
-        document.getElementById('yahoo-status').className = 'badge off';
-        document.getElementById('yahoo-status').innerText = 'Yahoo FX OFF';
+        // STREAM 1: Binance WebSockets (Depth + Trades)
+        wsSource1 = new WebSocket(`wss://stream.binance.com:9443/ws/${config.binanceSymbol}@depth10@100ms/${config.binanceSymbol}@trade`);
 
-        const config = assetConfig[currentAsset] || assetConfig['EURUSD'];
-
-        // 1. Binance Depth & Trade Stream
-        binanceWs = new WebSocket(`wss://stream.binance.com:9443/ws/${config.binanceSymbol}@depth10@100ms/${config.binanceSymbol}@trade`);
-
-        binanceWs.onopen = () => {
-            document.getElementById('binance-status').className = 'badge on';
-            document.getElementById('binance-status').innerText = 'Binance ON';
+        wsSource1.onopen = () => {
+            const badge = document.getElementById('source1-status');
+            badge.className = 'badge on';
+            badge.innerText = 'Binance ON';
         };
 
-        binanceWs.onmessage = (event) => {
+        wsSource1.onmessage = (event) => {
             const data = JSON.parse(event.data);
 
-            if (data.p && !currentAsset.includes('USD=X')) {
-                // If pure crypto or crypto-correlated
-                if(currentAsset === 'CRYPTO_IDX') {
-                    let idxPrice = parseFloat(data.p) * 0.125 + 250;
-                    document.getElementById('price').innerText = idxPrice.toFixed(config.decimals);
-                } else if(!currentAsset.includes('EUR') && !currentAsset.includes('AUD')) {
-                    document.getElementById('price').innerText = parseFloat(data.p).toFixed(config.decimals);
+            if (data.p) {
+                let p = parseFloat(data.p);
+                if (currentAsset === 'CRYPTO_IDX') {
+                    p = (p * 0.125) + 250; // Dynamic Composite Formula
                 }
-
-                if (data.m) {
-                    tickCountSell += parseFloat(data.q);
-                } else {
-                    tickCountBuy += parseFloat(data.q);
+                if (config.type === 'crypto') {
+                    document.getElementById('price').innerText = p.toFixed(config.decimals);
                 }
+                
+                if (data.m) tickSell += parseFloat(data.q);
+                else tickBuy += parseFloat(data.q);
             }
 
             if (data.bids && data.asks) {
-                binanceBids = data.bids.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
-                binanceAsks = data.asks.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
+                bids1 = data.bids.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
+                asks1 = data.asks.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
             }
         };
 
-        // 2. Yahoo Finance Live Interbank Rate & Tick Imbalance Fetcher
-        fetchYahooData(config);
-        yahooInterval = setInterval(() => fetchYahooData(config), 2000); // 2 second sync
-    }
+        // STREAM 2: Conditional Setup (Crypto -> Delta | Forex -> Yahoo Interbank)
+        if (config.type === 'crypto') {
+            document.getElementById('source2-status').innerText = 'Delta OFF';
+            wsSource2 = new WebSocket('wss://socket.delta.exchange');
 
-    async function fetchYahooData(config) {
-        try {
-            const symbol = config.yahooSymbol;
-            const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m`);
-            const json = await res.json();
+            wsSource2.onopen = () => {
+                document.getElementById('source2-status').className = 'badge on';
+                document.getElementById('source2-status').innerText = 'Delta ON';
+                wsSource2.send(JSON.stringify({
+                    "type": "subscribe",
+                    "payload": { "channels": [{ "name": "l2orderbook", "symbols": [config.deltaSymbol] }] }
+                }));
+            };
 
-            if (json.chart && json.chart.result && json.chart.result[0]) {
-                const meta = json.chart.result[0].meta;
-                const currentPrice = meta.regularMarketPrice;
-
-                document.getElementById('yahoo-status').className = 'badge on';
-                document.getElementById('yahoo-status').innerText = 'Yahoo FX ON';
-
-                // Update Forex Price from Interbank Feed
-                if(currentAsset.includes('EUR') || currentAsset.includes('AUD')) {
-                    document.getElementById('price').innerText = currentPrice.toFixed(config.decimals);
+            wsSource2.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'l2orderbook') {
+                    if (data.bids) bids2 = data.bids.reduce((sum, item) => sum + (parseFloat(item.limit_price || 0) * parseFloat(item.size || 0)), 0);
+                    if (data.asks) asks2 = data.asks.reduce((sum, item) => sum + (parseFloat(item.limit_price || 0) * parseFloat(item.size || 0)), 0);
                 }
-
-                // Calculate Yahoo Tick Vol Weight
-                if (lastYahooPrice !== 0) {
-                    const priceDiff = currentPrice - lastYahooPrice;
-                    if (priceDiff > 0) {
-                        yahooBids += Math.abs(priceDiff) * 100000; // Buyer Pressure
-                    } else if (priceDiff < 0) {
-                        yahooAsks += Math.abs(priceDiff) * 100000; // Seller Pressure
-                    }
-                }
-                lastYahooPrice = currentPrice;
-            }
-        } catch (e) {
-            console.log("Yahoo Fetch Fallback Sync active...");
+            };
+        } else {
+            // Forex Yahoo Live Interbank Feed
+            document.getElementById('source2-status').innerText = 'Yahoo FX OFF';
+            fetchYahooFX();
+            yahooInterval = setInterval(fetchYahooFX, 2000);
         }
     }
 
-    function changeAsset() {
-        currentAsset = document.getElementById('asset-selector').value;
-        lockedSignalData = null;
-        initDataStreams();
+    async function fetchYahooFX() {
+        try {
+            const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${config.yahooSymbol}?interval=1m`);
+            const json = await res.json();
+            if (json.chart && json.chart.result && json.chart.result[0]) {
+                const meta = json.chart.result[0].meta;
+                const price = meta.regularMarketPrice;
+
+                document.getElementById('source2-status').className = 'badge on';
+                document.getElementById('source2-status').innerText = 'Yahoo FX ON';
+
+                document.getElementById('price').innerText = price.toFixed(config.decimals);
+
+                if (lastPrice !== 0) {
+                    const diff = price - lastPrice;
+                    if (diff > 0) bids2 += Math.abs(diff) * 800000;
+                    else if (diff < 0) asks2 += Math.abs(diff) * 800000;
+                }
+                lastPrice = price;
+            }
+        } catch (e) {
+            console.log("Yahoo FX Feed Syncing...");
+        }
     }
 
-    function resetAccumulators() {
-        binanceBids = 0; binanceAsks = 0;
-        yahooBids = 0; yahooAsks = 0;
-        tickCountBuy = 0; tickCountSell = 0;
-        lastYahooPrice = 0;
-    }
-
-    // Binary Timer Sync Engine (30s Bet / 15s Confirmation / 15s Bet Window)
+    // Binary Timer Engine (30s Bet Pause / 15s Confirmation / 15s Bet Entry)
     setInterval(() => {
         const now = new Date();
         const seconds = now.getSeconds();
@@ -222,22 +221,22 @@
 
         document.getElementById('timer').innerText = `00:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
 
-        // PHASE 1: 30s to 00s (Background Merged Orderbook Calculation)
+        // PHASE 1: 30s to 00s (Background Accumulation)
         if (remainingSeconds < 30) {
             lockedSignalData = null;
-            document.getElementById('phase-text').innerText = 'Bet Paused. Accumulating Merged Binance + Yahoo Feed...';
+            document.getElementById('phase-text').innerText = 'Bet Paused (30s-00s). Accumulating Fresh Orderbook...';
             document.getElementById('phase-text').style.color = '#f0b90b';
             
-            document.getElementById('status-tag').innerText = 'BACKGROUND ACCUMULATION';
+            document.getElementById('status-tag').innerText = 'ACCUMULATING LIVE DATA';
             document.getElementById('status-tag').style.background = '#363c4e';
             document.getElementById('status-tag').style.color = '#fff';
 
             const liveData = calculateMergedData();
             renderUI(liveData, "ANALYZING...");
         } 
-        // PHASE 2: 59s to 45s (First 15s Confirmation Window)
+        // PHASE 2: 59s to 45s (First 15s Confirmation)
         else if (remainingSeconds >= 45) {
-            document.getElementById('phase-text').innerText = 'New Candle Open! Merging First 15s FX Imbalance...';
+            document.getElementById('phase-text').innerText = 'New Candle Open! Confirming First 15s Imbalance...';
             document.getElementById('phase-text').style.color = '#f0b90b';
             
             document.getElementById('status-tag').innerText = 'CONFIRMING IMBALANCE (15s)';
@@ -247,9 +246,9 @@
             const liveData = calculateMergedData();
             renderUI(liveData, "CONFIRMING...");
         } 
-        // PHASE 3: 44s to 30s (Signal Locked / Bet Window Open)
+        // PHASE 3: 44s to 30s (Signal Locked / Bet Entry)
         else {
-            document.getElementById('phase-text').innerText = 'MERGED SIGNAL LOCKED! PLACE BET NOW ON BROKER';
+            document.getElementById('phase-text').innerText = 'SIGNAL LOCKED! PLACE BET NOW ON BROKER';
             document.getElementById('phase-text').style.color = '#0ecb81';
             
             document.getElementById('status-tag').innerText = 'FINAL SIGNAL (BET NOW)';
@@ -263,24 +262,24 @@
         }
 
         if (seconds === 0) {
-            resetAccumulators();
+            tickBuy = 0; tickSell = 0;
+            bids2 = 0; asks2 = 0;
         }
     }, 1000);
 
     function calculateMergedData() {
-        // Combined Formula: Binance Volume + Yahoo FX Tick Imbalance Weight
-        const totalBids = binanceBids + yahooBids + (tickCountBuy * 500);
-        const totalAsks = binanceAsks + yahooAsks + (tickCountSell * 500);
+        const totalBids = bids1 + bids2 + (tickBuy * 400);
+        const totalAsks = asks1 + asks2 + (tickSell * 400);
         const totalVolume = totalBids + totalAsks;
 
         if (totalVolume === 0) {
-            return { signalText: "LEAN NEUTRAL", sigClass: "WAITING", cardClass: "", confidence: 50, imbalance: 0, totalBids: 0, totalAsks: 0 };
+            return { signalText: "NEUTRAL", sigClass: "WAITING", cardClass: "", confidence: 50, imbalance: 0, totalBids: 0, totalAsks: 0 };
         }
 
         const imbalance = (totalBids - totalAsks) / totalVolume;
         const confidence = Math.min(Math.round(52 + (Math.abs(imbalance) * 48)), 99);
 
-        let signalText = "LEAN NEUTRAL";
+        let signalText = "NEUTRAL";
         let cardClass = "";
         let sigClass = "WAITING";
 
@@ -319,7 +318,7 @@
         document.getElementById('sell-bar').style.width = (100 - buyPct) + '%';
     }
 
-    initDataStreams();
+    startFreshStreams();
 </script>
 </body>
 </html>
