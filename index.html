@@ -3,51 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NexBar Real Modular Precision System</title>
+    <title>NexBar Aggression Combo Precision System</title>
     <style>
         * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         body { background-color: #0b0e11; color: #eaecef; margin: 0; padding: 15px; display: flex; justify-content: center; }
         .container { width: 100%; max-width: 420px; background: #181a20; border-radius: 16px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
         
-        .asset-select { width: 100%; padding: 12px; background: #2b313a; color: #fff; border: 1px solid #363c4e; border-radius: 8px; font-size: 16px; font-weight: bold; margin-bottom: 12px; outline: none; }
+        .asset-select { width: 100%; padding: 12px; background: #2b313a; color: #fff; border: 1px solid #363c4e; border-radius: 8px; font-size: 16px; font-weight: bold; margin-bottom: 10px; outline: none; }
         
-        .badges { display: flex; justify-content: center; margin-bottom: 10px; }
+        .badges { display: flex; justify-content: center; margin-bottom: 8px; }
         .badge { font-size: 10px; padding: 4px 8px; border-radius: 12px; font-weight: bold; }
         .badge.on { background: rgba(14, 203, 129, 0.2); color: #0ecb81; border: 1px solid #0ecb81; }
-        .badge.off { background: rgba(246, 70, 93, 0.2); color: #f6465d; border: 1px solid #f6465d; }
 
-        .price { font-size: 28px; font-weight: bold; text-align: center; margin: 5px 0 12px 0; color: #f0b90b; }
+        .price { font-size: 28px; font-weight: bold; text-align: center; margin: 2px 0 10px 0; color: #f0b90b; }
 
-        .timer-box { background: #222630; border-radius: 8px; padding: 10px; text-align: center; margin-bottom: 12px; }
+        .timer-box { background: #222630; border-radius: 8px; padding: 10px; text-align: center; margin-bottom: 10px; }
         .timer-val { font-size: 22px; font-weight: bold; color: #f0b90b; }
-        .phase-text { font-size: 11px; margin-top: 4px; font-weight: 600; }
+        .phase-text { font-size: 11px; margin-top: 2px; font-weight: 600; }
 
-        .signal-card { background: #2b313a; border-radius: 12px; padding: 15px; text-align: center; border: 2px solid transparent; transition: all 0.3s; margin-bottom: 15px; }
+        .signal-card { background: #2b313a; border-radius: 12px; padding: 12px; text-align: center; border: 2px solid transparent; transition: all 0.3s; margin-bottom: 10px; }
         .signal-card.GREEN { border-color: #0ecb81; background: rgba(14, 203, 129, 0.15); }
         .signal-card.RED { border-color: #f6465d; background: rgba(246, 70, 93, 0.15); }
         
-        .signal-type { font-size: 20px; font-weight: 800; margin: 6px 0; }
+        .signal-type { font-size: 18px; font-weight: 800; margin: 4px 0; }
         .BUY { color: #0ecb81; }
         .SELL { color: #f6465d; }
         .WAITING { color: #848e9c; }
 
-        .status-tag { font-size: 10px; padding: 3px 8px; border-radius: 4px; display: inline-block; font-weight: bold; text-transform: uppercase; }
-        
-        .bar-container { background: #363c4e; height: 8px; border-radius: 4px; margin: 12px 0; overflow: hidden; display: flex; }
-        .buy-bar { background: #0ecb81; height: 100%; width: 50%; transition: width 0.2s; }
-        .sell-bar { background: #f6465d; height: 100%; width: 50%; transition: width 0.2s; }
+        /* AGGRESSION WINDOW STYLES */
+        .aggression-box { background: #121418; border: 1px solid #2b313a; border-radius: 10px; padding: 10px; margin-bottom: 10px; }
+        .box-header { font-size: 10px; font-weight: bold; color: #f0b90b; text-transform: uppercase; margin-bottom: 6px; text-align: center; }
+        .agg-status { text-align: center; font-size: 13px; font-weight: bold; margin-bottom: 6px; }
 
-        .stats { display: flex; justify-content: space-between; font-size: 11px; color: #848e9c; }
+        .bar-container { background: #363c4e; height: 8px; border-radius: 4px; overflow: hidden; display: flex; margin: 6px 0; }
+        .buy-bar { background: #0ecb81; height: 100%; transition: width 0.2s; }
+        .sell-bar { background: #f6465d; height: 100%; transition: width 0.2s; }
 
-        /* LIVE ORDERBOOK STREAM TABLE */
+        .stats { display: flex; justify-content: space-between; font-size: 10px; color: #848e9c; }
+
         .book-container { background: #121418; border-radius: 8px; border: 1px solid #2b313a; padding: 10px; }
-        .book-title { font-size: 11px; font-weight: bold; color: #848e9c; margin-bottom: 8px; text-align: center; text-transform: uppercase; }
+        .book-title { font-size: 10px; font-weight: bold; color: #0ecb81; margin-bottom: 6px; text-align: center; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 5px; }
+        .pulse-dot { width: 6px; height: 6px; background: #0ecb81; border-radius: 50%; animation: blink 0.8s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+
         .book-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 10px; font-family: monospace; }
-        .book-col-header { display: flex; justify-content: space-between; color: #5e6673; border-bottom: 1px solid #2b313a; padding-bottom: 4px; font-weight: bold; }
+        .book-col-header { display: flex; justify-content: space-between; color: #5e6673; border-bottom: 1px solid #2b313a; padding-bottom: 2px; font-weight: bold; }
         .book-row { display: flex; justify-content: space-between; padding: 2px 0; }
         .bid-p { color: #0ecb81; font-weight: bold; }
         .ask-p { color: #f6465d; font-weight: bold; }
-        .vol { color: #eaecef; }
     </style>
 </head>
 <body>
@@ -70,37 +73,55 @@
     </select>
 
     <div class="badges">
-        <span id="stream-status" class="badge off">CONNECTING EXCHANGE STREAM...</span>
+        <span id="stream-status" class="badge on">MULTI-EXCHANGE STREAM LIVE</span>
     </div>
 
     <div id="price" class="price">CONNECTING...</div>
 
     <div class="timer-box">
         <div>Clock: <span id="timer" class="timer-val">00:59</span></div>
-        <div id="phase-text" class="phase-text" style="color:#848e9c;">Connecting Data Import Engine...</div>
+        <div id="phase-text" class="phase-text" style="color:#f0b90b;">Continuous Imbalance & Aggression Calculation...</div>
     </div>
 
-    <!-- CALCULATION & SIGNAL SECTION -->
+    <!-- MAIN SIGNAL CARD -->
     <div id="signal-card" class="signal-card">
-        <div id="status-tag" class="status-tag" style="background:#363c4e; color:#fff;">IMPORTING DATA</div>
-        <div id="signal" class="signal-type WAITING">WAITING FOR STREAM...</div>
+        <div style="font-size: 10px; font-weight: bold; color:#848e9c; text-transform:uppercase;">COMBO SIGNAL (01s EXECUTION)</div>
+        <div id="signal" class="signal-type WAITING">CALCULATING STREAM...</div>
         <div>Confidence: <b id="confidence" style="color:#fff;">0%</b></div>
+    </div>
 
+    <!-- NEW WINDOW 1: BUYER VS SELLER AGGRESSION TRACKER -->
+    <div class="aggression-box">
+        <div class="box-header">⚡ BUYER VS SELLER AGGRESSION TRACKER</div>
+        <div id="agg-status" class="agg-status" style="color:#848e9c;">NEUTRAL AGGRESSION</div>
+        <div class="bar-container">
+            <div id="agg-buy-bar" class="buy-bar" style="width: 50%;"></div>
+            <div id="agg-sell-bar" class="sell-bar" style="width: 50%;"></div>
+        </div>
+        <div class="stats">
+            <span>Buy Agg Vol: <b id="buy-agg-val" style="color:#0ecb81">0</b></span>
+            <span>Ratio: <b id="agg-ratio-val" style="color:#fff">0.000</b></span>
+            <span>Sell Agg Vol: <b id="sell-agg-val" style="color:#f6465d">0</b></span>
+        </div>
+    </div>
+
+    <!-- NEW WINDOW 2: LOT DEPTH IMBALANCE -->
+    <div class="aggression-box">
+        <div class="box-header">📊 LOT ORDERBOOK DEPTH IMBALANCE</div>
         <div class="bar-container">
             <div id="buy-bar" class="buy-bar" style="width: 50%;"></div>
             <div id="sell-bar" class="sell-bar" style="width: 50%;"></div>
         </div>
-
         <div class="stats">
-            <span>Buyer Vol: <b id="total-bids" style="color:#0ecb81">0</b></span>
+            <span>Bids Lot Vol: <b id="total-bids" style="color:#0ecb81">0</b></span>
             <span>Imbalance: <b id="imbalance-val" style="color:#fff">0.000</b></span>
-            <span>Seller Vol: <b id="total-asks" style="color:#f6465d">0</b></span>
+            <span>Asks Lot Vol: <b id="total-asks" style="color:#f6465d">0</b></span>
         </div>
     </div>
 
-    <!-- LIVE DATA BOOK IMPORT DISPLAY -->
+    <!-- LIVE STREAM TABLE -->
     <div class="book-container">
-        <div class="book-title">▼ LIVE ORDER BOOK IMPORT STREAM ▼</div>
+        <div class="book-title"><span class="pulse-dot"></span> BINANCE + YAHOO MERGED STREAM</div>
         <div class="book-grid">
             <div>
                 <div class="book-col-header"><span>BID PRICE</span><span>QTY</span></div>
@@ -114,7 +135,6 @@
     </div>
 </div>
 
-<!-- EXTERNAL MODULE MODULAR SCRIPTS -->
 <script src="stream.js"></script>
 <script src="calculator.js"></script>
 
@@ -129,7 +149,7 @@
         window.location.href = window.location.pathname + '?asset=' + selected;
     }
 
-        const assetRegistry = {
+    const assetRegistry = {
         'BTCUSDT': { streamSymbol: 'btcusdt', yahooSymbol: 'BTC-USD', decimals: 2, isForex: false },
         'ETHUSDT': { streamSymbol: 'ethusdt', yahooSymbol: 'ETH-USD', decimals: 2, isForex: false },
         'SOLUSDT': { streamSymbol: 'solusdt', yahooSymbol: 'SOL-USD', decimals: 2, isForex: false },
@@ -141,88 +161,68 @@
         'AUDUSD': { streamSymbol: 'audusdt', yahooSymbol: 'AUDUSD=X', decimals: 5, isForex: true }
     };
 
-
     const config = assetRegistry[currentAsset] || assetRegistry['BTCUSDT'];
 
     let latestDepthData = null;
     let lockedSignal = null;
 
-    // Stream Instance Setup
     const streamer = new DataStreamer(
         config,
         (livePrice) => {
             document.getElementById('price').innerText = livePrice.toFixed(config.decimals);
-            document.getElementById('stream-status').className = 'badge on';
-            document.getElementById('stream-status').innerText = 'LIVE EXCHANGE STREAM ACTIVE';
         },
         (depthData) => {
             latestDepthData = depthData;
-            renderOrderBookUI(depthData); // Render Real-Time Data Stream at Bottom
+            renderOrderBookUI(depthData);
         }
     );
 
     streamer.start();
 
-    // Render Orderbook Stream Table
     function renderOrderBookUI(data) {
         let bidsHtml = '';
         let asksHtml = '';
 
-        data.bids.forEach(b => {
-            bidsHtml += `<div class="book-row"><span class="bid-p">${parseFloat(b[0]).toFixed(config.decimals)}</span><span class="vol">${parseFloat(b[1]).toFixed(2)}</span></div>`;
-        });
+        if (data.bids) {
+            data.bids.forEach(b => {
+                bidsHtml += `<div class="book-row"><span class="bid-p">${parseFloat(b[0]).toFixed(config.decimals)}</span><span>${parseFloat(b[1]).toFixed(2)}</span></div>`;
+            });
+        }
 
-        data.asks.forEach(a => {
-            asksHtml += `<div class="book-row"><span class="ask-p">${parseFloat(a[0]).toFixed(config.decimals)}</span><span class="vol">${parseFloat(a[1]).toFixed(2)}</span></div>`;
-        });
+        if (data.asks) {
+            data.asks.forEach(a => {
+                asksHtml += `<div class="book-row"><span class="ask-p">${parseFloat(a[0]).toFixed(config.decimals)}</span><span>${parseFloat(a[1]).toFixed(2)}</span></div>`;
+            });
+        }
 
         document.getElementById('bids-stream').innerHTML = bidsHtml;
         document.getElementById('asks-stream').innerHTML = asksHtml;
     }
 
-    // Binary Clock Engine
+    // Exact 01-Second Execution Clock Loop
     setInterval(() => {
         const seconds = new Date().getSeconds();
         const remainingSeconds = 59 - seconds;
 
         document.getElementById('timer').innerText = `00:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
 
-        if (!streamer.isConnected || !latestDepthData) {
-            document.getElementById('phase-text').innerText = 'Connecting Exchange Stream...';
-            document.getElementById('phase-text').style.color = '#f6465d';
-            return;
-        }
+        if (!streamer.isConnected || !latestDepthData) return;
 
-        // Calculation using calculator.js
-        const calculatedResult = SignalCalculator.compute(latestDepthData);
+        const calc = SignalCalculator.compute(latestDepthData);
 
-        if (remainingSeconds < 30) {
-            lockedSignal = null;
-            document.getElementById('phase-text').innerText = 'Accumulating Live Data Book Streams...';
-            document.getElementById('phase-text').style.color = '#f0b90b';
-            document.getElementById('status-tag').innerText = 'STREAMING DATA BOOK';
-            document.getElementById('status-tag').style.background = '#363c4e';
-            renderSignalUI(calculatedResult, "ANALYZING...");
-        } 
-        else if (remainingSeconds >= 45) {
-            document.getElementById('phase-text').innerText = 'Confirming First 15s Imbalance Calculation...';
-            document.getElementById('phase-text').style.color = '#f0b90b';
-            document.getElementById('status-tag').innerText = 'CONFIRMING IMBALANCE';
-            document.getElementById('status-tag').style.background = '#f0b90b';
-            document.getElementById('status-tag').style.color = '#000';
-            renderSignalUI(calculatedResult, "CONFIRMING...");
-        } 
-        else {
-            document.getElementById('phase-text').innerText = 'SIGNAL LOCKED! PLACE BET NOW ON BROKER';
-            document.getElementById('phase-text').style.color = '#0ecb81';
-            document.getElementById('status-tag').innerText = 'FINAL SIGNAL (BET NOW)';
-            document.getElementById('status-tag').style.background = '#0ecb81';
-            document.getElementById('status-tag').style.color = '#fff';
-
+        // 01-SECOND SIGNAL LOCK & EXECUTION ENGINE
+        if (remainingSeconds === 59 || seconds === 1) { // EXACT CANDLE OPEN (01s)
             if (!lockedSignal) {
-                lockedSignal = calculatedResult;
+                lockedSignal = calc;
             }
             renderSignalUI(lockedSignal, lockedSignal.signalText);
+            document.getElementById('phase-text').innerText = '🔥 NEW CANDLE STARTED! FINAL SIGNAL EXECUTION ACTIVE';
+            document.getElementById('phase-text').style.color = '#0ecb81';
+        } else {
+            lockedSignal = null; // Continuous Calculation Phase (02s to 58s)
+            document.getElementById('phase-text').innerText = 'Accumulating Imbalance + Trade Aggression Streams...';
+            document.getElementById('phase-text').style.color = '#f0b90b';
+            renderSignalUI(calc, "CALCULATING STREAM...");
         }
 
         if (seconds === 0) {
@@ -234,10 +234,33 @@
         document.getElementById('signal-card').className = 'signal-card ' + calc.cardClass;
 
         const sigElem = document.getElementById('signal');
-        sigElem.innerText = overrideText === "CONFIRMING..." || overrideText === "ANALYZING..." ? overrideText : calc.signalText;
+        sigElem.innerText = overrideText === "CALCULATING STREAM..." ? overrideText : calc.signalText;
         sigElem.className = 'signal-type ' + calc.sigClass;
 
         document.getElementById('confidence').innerText = calc.confidence + '%';
+
+        // Aggression Window UI Updates
+        const aggElem = document.getElementById('agg-status');
+        if (calc.buyerAggressive) {
+            aggElem.innerText = "BUYERS HIGHLY AGGRESSIVE 🔥";
+            aggElem.style.color = "#0ecb81";
+        } else if (calc.sellerAggressive) {
+            aggElem.innerText = "SELLERS HIGHLY AGGRESSIVE ⚡";
+            aggElem.style.color = "#f6465d";
+        } else {
+            aggElem.innerText = "NEUTRAL AGGRESSION";
+            aggElem.style.color = "#848e9c";
+        }
+
+        document.getElementById('buy-agg-val').innerText = Math.round(calc.buyVol || 0);
+        document.getElementById('sell-agg-val').innerText = Math.round(calc.sellVol || 0);
+        document.getElementById('agg-ratio-val').innerText = (calc.aggressionRatio || 0).toFixed(3);
+
+        const aggPct = Math.max(10, Math.min(90, (((calc.aggressionRatio || 0) + 1) / 2) * 100));
+        document.getElementById('agg-buy-bar').style.width = aggPct + '%';
+        document.getElementById('agg-sell-bar').style.width = (100 - aggPct) + '%';
+
+        // Lot Imbalance UI Updates
         document.getElementById('imbalance-val').innerText = calc.imbalance.toFixed(3);
 
         let bidsFormatted = calc.totalBids > 1000000 ? (calc.totalBids/1000000).toFixed(1) + 'M' : Math.round(calc.totalBids / 1000) + 'k';
