@@ -48,7 +48,7 @@
 
         .book-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 10px; font-family: monospace; }
         .book-col-header { display: flex; justify-content: space-between; color: #5e6673; border-bottom: 1px solid #2b313a; padding-bottom: 2px; font-weight: bold; }
-        .book-row { display: flex; justify-content: space-between; padding: 2px 0; }
+        .book-row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px dotted #1f232a; }
         .bid-p { color: #0ecb81; font-weight: bold; }
         .ask-p { color: #f6465d; font-weight: bold; }
     </style>
@@ -92,7 +92,7 @@
         <div>Confidence: <b id="confidence" style="color:#fff;">0%</b></div>
     </div>
 
-    <!-- NEW WINDOW 1: BUYER VS SELLER AGGRESSION TRACKER -->
+    <!-- WINDOW 1: BUYER VS SELLER AGGRESSION TRACKER -->
     <div class="aggression-box">
         <div class="box-header">⚡ BUYER VS SELLER AGGRESSION TRACKER</div>
         <div id="agg-status" class="agg-status" style="color:#848e9c;">NEUTRAL AGGRESSION</div>
@@ -107,7 +107,7 @@
         </div>
     </div>
 
-    <!-- NEW WINDOW 2: LOT DEPTH IMBALANCE -->
+    <!-- WINDOW 2: LOT DEPTH IMBALANCE -->
     <div class="aggression-box">
         <div class="box-header">📊 LOT ORDERBOOK DEPTH IMBALANCE</div>
         <div class="bar-container">
@@ -123,7 +123,7 @@
 
     <!-- LIVE STREAM TABLE -->
     <div class="book-container">
-        <div class="book-title"><span class="pulse-dot"></span> BINANCE + YAHOO MERGED STREAM</div>
+        <div class="book-title"><span class="pulse-dot"></span> 4-ASSET COMPOSITE LIVE ORDERBOOK</div>
         <div class="book-grid">
             <div>
                 <div class="book-col-header"><span>BID PRICE</span><span>QTY</span></div>
@@ -174,9 +174,8 @@
         document.getElementById('price').innerText = "4-ASSET INDEX";
         streamer = new CryptoIDXStreamer((multiData) => {
             latestDepthData = multiData;
-            if (multiData && multiData.btc && multiData.btc.bids) {
-                renderOrderBookUI(multiData.btc, 2);
-            }
+            // FIXED: Pass COMPLETE multiData object so all 4 coins (BTC, ETH, LTC, ZEC) render!
+            renderOrderBookUI(multiData, 2);
         });
         streamer.connect();
     } else {
@@ -194,42 +193,40 @@
     }
 
     function renderOrderBookUI(data, decimals) {
-    let bidsHtml = '';
-    let asksHtml = '';
+        let bidsHtml = '';
+        let asksHtml = '';
 
-    if (data && data.btc && data.eth && data.ltc && data.zec) {
-        const coins = [
-            { key: 'btc', label: 'BTC', dec: 2 },
-            { key: 'eth', label: 'ETH', dec: 2 },
-            { key: 'ltc', label: 'LTC', dec: 2 },
-            { key: 'zec', label: 'ZEC', dec: 2 }
-        ];
+        // Check if 4-Asset Composite Stream is Active
+        if (data && data.btc && data.eth && data.ltc && data.zec) {
+            const coins = [
+                { key: 'btc', label: 'BTC', dec: 2 },
+                { key: 'eth', label: 'ETH', dec: 2 },
+                { key: 'ltc', label: 'LTC', dec: 2 },
+                { key: 'zec', label: 'ZEC', dec: 2 }
+            ];
 
-        coins.forEach(item => {
-            const c = data[item.key];
-            const bidP = (c && c.bids && c.bids[0]) ? parseFloat(c.bids[0][0]).toFixed(item.dec) : '0.00';
-            const askP = (c && c.asks && c.asks[0]) ? parseFloat(c.asks[0][0]).toFixed(item.dec) : '0.00';
-            const bidQ = (c && c.bids && c.bids[0]) ? parseFloat(c.bids[0][1]).toFixed(2) : '0.00';
-            const askQ = (c && c.asks && c.asks[0]) ? parseFloat(c.asks[0][1]).toFixed(2) : '0.00';
+            coins.forEach(item => {
+                const c = data[item.key];
+                const bidP = (c && c.bids && c.bids[0]) ? parseFloat(c.bids[0][0]).toFixed(item.dec) : '0.00';
+                const askP = (c && c.asks && c.asks[0]) ? parseFloat(c.asks[0][0]).toFixed(item.dec) : '0.00';
+                const bidQ = (c && c.bids && c.bids[0]) ? parseFloat(c.bids[0][1]).toFixed(2) : '0.00';
+                const askQ = (c && c.asks && c.asks[0]) ? parseFloat(c.asks[0][1]).toFixed(2) : '0.00';
 
-            bidsHtml += `<div class="book-row"><span class="bid-p">${item.label} $${bidP}</span><span>${bidQ}</span></div>`;
-            asksHtml += `<div class="book-row"><span class="ask-p">${item.label} $${askP}</span><span>${askQ}</span></div>`;
-        });
-    } else if (data && data.bids && data.asks) {
-        data.bids.slice(0, 5).forEach(b => {
-            bidsHtml += `<div class="book-row"><span class="bid-p">${parseFloat(b[0]).toFixed(decimals)}</span><span>${parseFloat(b[1]).toFixed(2)}</span></div>`;
-        });
-        data.asks.slice(0, 5).forEach(a => {
-            asksHtml += `<div class="book-row"><span class="ask-p">${parseFloat(a[0]).toFixed(decimals)}</span><span>${parseFloat(a[1]).toFixed(2)}</span></div>`;
-        });
+                bidsHtml += `<div class="book-row"><span class="bid-p">${item.label} $${bidP}</span><span>${bidQ}</span></div>`;
+                asksHtml += `<div class="book-row"><span class="ask-p">${item.label} $${askP}</span><span>${askQ}</span></div>`;
+            });
+        } else if (data && data.bids && data.asks) {
+            data.bids.slice(0, 5).forEach(b => {
+                bidsHtml += `<div class="book-row"><span class="bid-p">${parseFloat(b[0]).toFixed(decimals)}</span><span>${parseFloat(b[1]).toFixed(2)}</span></div>`;
+            });
+            data.asks.slice(0, 5).forEach(a => {
+                asksHtml += `<div class="book-row"><span class="ask-p">${parseFloat(a[0]).toFixed(decimals)}</span><span>${parseFloat(a[1]).toFixed(2)}</span></div>`;
+            });
+        }
+
+        document.getElementById('bids-stream').innerHTML = bidsHtml;
+        document.getElementById('asks-stream').innerHTML = asksHtml;
     }
-
-    document.getElementById('bids-stream').innerHTML = bidsHtml;
-    document.getElementById('asks-stream').innerHTML = asksHtml;
-}
-
-
-
 
     // Exact 01-Second Execution Clock Loop
     setInterval(() => {
@@ -285,10 +282,12 @@
 
         // Aggression Window UI Updates
         const aggElem = document.getElementById('agg-status');
-        if (calc.buyerAggressive || (calc.combinedAggression > 0.02)) {
+        const aggRatio = calc.aggressionRatio !== undefined ? calc.aggressionRatio : (parseFloat(calc.combinedAggression) || 0);
+
+        if (calc.buyerAggressive || aggRatio > 0.15) {
             aggElem.innerText = "BUYERS HIGHLY AGGRESSIVE 🔥";
             aggElem.style.color = "#0ecb81";
-        } else if (calc.sellerAggressive || (calc.combinedAggression < -0.02)) {
+        } else if (calc.sellerAggressive || aggRatio < -0.15) {
             aggElem.innerText = "SELLERS HIGHLY AGGRESSIVE ⚡";
             aggElem.style.color = "#f6465d";
         } else {
@@ -299,7 +298,6 @@
         document.getElementById('buy-agg-val').innerText = Math.round(calc.buyVol || 0);
         document.getElementById('sell-agg-val').innerText = Math.round(calc.sellVol || 0);
         
-        const aggRatio = calc.aggressionRatio || parseFloat(calc.combinedAggression) || 0;
         document.getElementById('agg-ratio-val').innerText = typeof aggRatio === 'number' ? aggRatio.toFixed(3) : aggRatio;
 
         const aggPct = Math.max(10, Math.min(90, ((aggRatio + 1) / 2) * 100));
@@ -307,14 +305,14 @@
         document.getElementById('agg-sell-bar').style.width = (100 - aggPct) + '%';
 
         // Lot Imbalance UI Updates
-        const imbVal = calc.imbalance !== undefined ? calc.imbalance : parseFloat(calc.combinedImbalance) || 0;
+        const imbVal = calc.imbalance !== undefined ? calc.imbalance : (parseFloat(calc.combinedImbalance) || 0);
         document.getElementById('imbalance-val').innerText = typeof imbVal === 'number' ? imbVal.toFixed(3) : imbVal;
 
         let totalBids = calc.totalBids || 0;
         let totalAsks = calc.totalAsks || 0;
 
         let bidsFormatted = totalBids > 1000000 ? (totalBids/1000000).toFixed(1) + 'M' : Math.round(totalBids / 1000) + 'k';
-        let asksFormatted = totalAsks > 1000000 ? (totalAsks/1000000).toFixed(1) + 'M' : Math.round(totalAsks / 1000) + 'k';
+        let asksFormatted = totalAsks > 1000000 ? (totalAsks/1000000).toFixed(1) + 'M' : Math.round(totalBids / 1000) + 'k';
 
         document.getElementById('total-bids').innerText = bidsFormatted;
         document.getElementById('total-asks').innerText = asksFormatted;
