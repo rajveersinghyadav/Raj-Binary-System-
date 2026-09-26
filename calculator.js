@@ -1,64 +1,115 @@
 class CryptoIDXCalculator {
     static compute(multiStreamData) {
         if (!multiStreamData) {
-            return { signalText: "WAITING DATA", confidence: 0, sigClass: "WAITING", cardClass: "" };
+            return {
+                signalText: "WAITING DATA",
+                confidence: 0,
+                sigClass: "WAITING",
+                cardClass: "",
+                buyerAggressive: false,
+                sellerAggressive: false,
+                buyVol: 0,
+                sellVol: 0,
+                aggressionRatio: 0,
+                imbalance: 0,
+                totalBids: 0,
+                totalAsks: 0
+            };
         }
 
-        const weights = { btc: 0.40, eth: 0.30, ltc: 0.15, zec: 0.15 };
+        // Exact Binomo Crypto IDX Weightage Matrix
+        const weights = {
+            btc: 0.40,
+            eth: 0.30,
+            ltc: 0.15,
+            zec: 0.15
+        };
 
-        let combinedImbalance = 0;
-        let combinedAggression = 0;
-        let activeCount = 0;
+        let weightedTotalBids = 0;
+        let weightedTotalAsks = 0;
+        let weightedBuyVol = 0;
+        let weightedSellVol = 0;
+        let activeStreams = 0;
 
+        // 1. ALL 4 ORDERBOOKS (BTC, ETH, LTC, ZEC) MERGED CALCULATION
         for (let coin in weights) {
             const data = multiStreamData[coin];
-            if (data && data.bids.length > 0 && data.asks.length > 0) {
-                // Depth Imbalance Calculation
-                const bidsVol = data.bids.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
-                const asksVol = data.asks.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
-                const totalDepth = bidsVol + asksVol;
-                const coinImbalance = totalDepth > 0 ? (bidsVol - asksVol) / totalDepth : 0;
+            if (data && data.bids && data.asks && data.bids.length > 0 && data.asks.length > 0) {
+                // Individual Coin Bids & Asks Vol Calculation (Price * Qty)
+                const coinBids = data.bids.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
+                const coinAsks = data.asks.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
 
-                // Aggression Volume Calculation
-                const totalTrade = data.buyVol + data.sellVol;
-                const coinAggression = totalTrade > 0 ? (data.buyVol - data.sellVol) / totalTrade : 0;
+                // Multiply with Weightage Factor
+                weightedTotalBids += coinBids * weights[coin];
+                weightedTotalAsks += coinAsks * weights[coin];
 
-                // Weighted Accumulation
-                combinedImbalance += coinImbalance * weights[coin];
-                combinedAggression += coinAggression * weights[coin];
-                activeCount++;
+                // Aggression Trade Volumes with Weightage
+                weightedBuyVol += (data.buyVol || 0) * weights[coin];
+                weightedSellVol += (data.sellVol || 0) * weights[coin];
+
+                activeStreams++;
             }
         }
 
-        if (activeCount < 2) {
-            return { signalText: "CONNECTING WEBSOCKETS...", confidence: 0, sigClass: "WAITING", cardClass: "" };
+        if (activeStreams < 2) {
+            return {
+                signalText: "SYNCING 4 STREAMS...",
+                confidence: 0,
+                sigClass: "WAITING",
+                cardClass: "",
+                buyerAggressive: false,
+                sellerAggressive: false,
+                buyVol: 0,
+                sellVol: 0,
+                aggressionRatio: 0,
+                imbalance: 0,
+                totalBids: 0,
+                totalAsks: 0
+            };
         }
 
-        // Final Composite Score (40% Orderbook Depth + 60% Live Aggression Trades)
+        // 2. COMBINED 4-ASSET NET IMBALANCE CALCULATION
+        const grandTotalDepth = weightedTotalBids + weightedTotalAsks;
+        const combinedImbalance = grandTotalDepth > 0 ? (weightedTotalBids - weightedTotalAsks) / grandTotalDepth : 0;
+
+        // 3. COMBINED 4-ASSET AGGRESSION RATIO CALCULATION
+        const grandTotalTrades = weightedBuyVol + weightedSellVol;
+        const combinedAggression = grandTotalTrades > 0 ? (weightedBuyVol - weightedSellVol) / grandTotalTrades : 0;
+
+        // 4. COMPOSITE INDEX SCORE (40% Orderbooks Imbalance + 60% Trades Aggression)
         const compositeScore = (combinedImbalance * 0.4) + (combinedAggression * 0.6);
 
-        let signalText = "WAITING DATA / NEUTRAL";
+        let signalText = "WAITING / NEUTRAL";
         let sigClass = "WAITING";
         let cardClass = "";
         let confidence = 50;
 
-        // Next Candle Prediction Rule
-        if (compositeScore > 0.02) {
+        let buyerAggressive = combinedAggression > 0.05;
+        let sellerAggressive = combinedAggression < -0.05;
+
+        // 5. NEXT CANDLE PREDICTION RULES
+        if (compositeScore > 0.015 && combinedImbalance > 0) {
             signalText = "NEXT CANDLE: GREEN (BUY)";
             sigClass = "BUY";
             cardClass = "GREEN";
-            confidence = Math.min(Math.round(70 + (Math.abs(compositeScore) * 60)), 99);
-        } else if (compositeScore < -0.02) {
+            confidence = Math.min(Math.round(70 + (Math.abs(compositeScore) * 80)), 98);
+        } else if (compositeScore < -0.015 && combinedImbalance < 0) {
             signalText = "NEXT CANDLE: RED (SELL)";
             sigClass = "SELL";
             cardClass = "RED";
-            confidence = Math.min(Math.round(70 + (Math.abs(compositeScore) * 60)), 99);
+            confidence = Math.min(Math.round(70 + (Math.abs(compositeScore) * 80)), 98);
         }
 
         return {
-            combinedImbalance: (combinedImbalance * 100).toFixed(2) + "%",
-            combinedAggression: (combinedAggression * 100).toFixed(2) + "%",
-            compositeScore: compositeScore.toFixed(4),
+            imbalance: combinedImbalance,
+            aggressionRatio: combinedAggression,
+            compositeScore: compositeScore,
+            totalBids: weightedTotalBids,
+            totalAsks: weightedTotalAsks,
+            buyVol: weightedBuyVol,
+            sellVol: weightedSellVol,
+            buyerAggressive,
+            sellerAggressive,
             signalText,
             confidence,
             sigClass,
