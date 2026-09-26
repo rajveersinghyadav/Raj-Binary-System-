@@ -1,44 +1,64 @@
-// Dual-Exchange Orderbook Calculation Engine
+// Dual-Filter Combination Signal Engine (Imbalance + Aggression)
 class SignalCalculator {
     static compute(depthData) {
         if (!depthData || !depthData.bids || !depthData.asks) {
-            return { imbalance: 0, confidence: 0, signalText: "WAITING DATA", cardClass: "", sigClass: "WAITING", totalBids: 0, totalAsks: 0 };
+            return { imbalance: 0, aggressionRatio: 0, buyerAggressive: false, sellerAggressive: false, confidence: 0, signalText: "WAITING DATA", cardClass: "", sigClass: "WAITING", totalBids: 0, totalAsks: 0 };
         }
 
-        // 1. Binance Buyer & Seller Volume Calculation
+        // 1. Orderbook Depth Imbalance
         const binanceBidsVol = depthData.bids.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
         const binanceAsksVol = depthData.asks.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
 
-        // 2. Merged Total Buyer & Seller Volume (Binance + Yahoo Interbank Weights)
-        const totalBids = binanceBidsVol + depthData.yahooBidsWeight + (depthData.buyTicks * 300);
-        const totalAsks = binanceAsksVol + depthData.yahooAsksWeight + (depthData.sellTicks * 300);
-        
+        const totalBids = binanceBidsVol + depthData.yahooBidsWeight;
+        const totalAsks = binanceAsksVol + depthData.yahooAsksWeight;
         const totalVolume = totalBids + totalAsks;
 
-        if (totalVolume === 0) {
-            return { imbalance: 0, confidence: 50, signalText: "LEAN NEUTRAL", cardClass: "", sigClass: "WAITING", totalBids: 0, totalAsks: 0 };
+        const imbalance = totalVolume > 0 ? (totalBids - totalAsks) / totalVolume : 0;
+
+        // 2. Buyer vs Seller Aggression Calculation
+        const totalMarketVol = depthData.buyMarketVol + depthData.sellMarketVol;
+        let aggressionRatio = 0;
+        if (totalMarketVol > 0) {
+            aggressionRatio = (depthData.buyMarketVol - depthData.sellMarketVol) / totalMarketVol;
         }
 
-        // Imbalance Formula
-        const imbalance = (totalBids - totalAsks) / totalVolume;
-        const confidence = Math.min(Math.round(52 + (Math.abs(imbalance) * 48)), 99);
+        const buyerAggressive = aggressionRatio > 0.08;
+        const sellerAggressive = aggressionRatio < -0.08;
 
+        // 3. COMBINATION SIGNAL GENERATION
         let signalText = "LEAN NEUTRAL";
         let cardClass = "";
         let sigClass = "WAITING";
+        let confidence = 50;
 
-        if (imbalance > 0.04) {
+        // Both Imbalance AND Trade Aggression must agree
+        if (imbalance > 0.03 && buyerAggressive) {
             signalText = "NEXT CANDLE: GREEN (BUY)";
             sigClass = "BUY";
             cardClass = "GREEN";
-        } else if (imbalance < -0.04) {
+            confidence = Math.min(Math.round(65 + (Math.abs(imbalance + aggressionRatio) * 30)), 99);
+        } else if (imbalance < -0.03 && sellerAggressive) {
             signalText = "NEXT CANDLE: RED (SELL)";
             sigClass = "SELL";
             cardClass = "RED";
+            confidence = Math.min(Math.round(65 + (Math.abs(imbalance + aggressionRatio) * 30)), 99);
+        } else if (imbalance > 0.04) {
+            signalText = "LEAN BUY (WEAK AGGRESSION)";
+            sigClass = "BUY";
+            confidence = 58;
+        } else if (imbalance < -0.04) {
+            signalText = "LEAN SELL (WEAK AGGRESSION)";
+            sigClass = "SELL";
+            confidence = 58;
         }
 
         return {
             imbalance,
+            aggressionRatio,
+            buyerAggressive,
+            sellerAggressive,
+            buyVol: depthData.buyMarketVol,
+            sellVol: depthData.sellMarketVol,
             confidence,
             signalText,
             cardClass,
