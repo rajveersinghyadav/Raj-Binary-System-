@@ -174,7 +174,6 @@
         document.getElementById('price').innerText = "4-ASSET INDEX";
         streamer = new CryptoIDXStreamer((multiData) => {
             latestDepthData = multiData;
-            // FIXED: Pass COMPLETE multiData object so all 4 coins (BTC, ETH, LTC, ZEC) render!
             renderOrderBookUI(multiData, 2);
         });
         streamer.connect();
@@ -311,8 +310,9 @@
         let totalBids = calc.totalBids || 0;
         let totalAsks = calc.totalAsks || 0;
 
-        let bidsFormatted = totalBids > 1000000 ? (totalBids/1000000).toFixed(1) + 'M' : Math.round(totalBids / 1000) + 'k';
-        let asksFormatted = totalAsks > 1000000 ? (totalAsks/1000000).toFixed(1) + 'M' : Math.round(totalBids / 1000) + 'k';
+        // FIXED: Corrected totalBids and totalAsks formatting
+        let bidsFormatted = totalBids >= 1000000 ? (totalBids / 1000000).toFixed(1) + 'M' : Math.round(totalBids / 1000) + 'k';
+        let asksFormatted = totalAsks >= 1000000 ? (totalAsks / 1000000).toFixed(1) + 'M' : Math.round(totalAsks / 1000) + 'k';
 
         document.getElementById('total-bids').innerText = bidsFormatted;
         document.getElementById('total-asks').innerText = asksFormatted;
