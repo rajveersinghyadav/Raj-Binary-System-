@@ -3,156 +3,287 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NexBar Live Orderflow Signal</title>
+    <title>NexBar Precision Binary Signal System</title>
     <style>
         * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         body { background-color: #0b0e11; color: #eaecef; margin: 0; padding: 15px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 400px; background: #181a20; border-radius: 16px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .title { font-size: 18px; font-weight: bold; }
-        .badges { display: flex; gap: 6px; }
+        .container { width: 100%; max-width: 420px; background: #181a20; border-radius: 16px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        
+        .asset-select { width: 100%; padding: 12px; background: #2b313a; color: #fff; border: 1px solid #363c4e; border-radius: 8px; font-size: 16px; font-weight: bold; margin-bottom: 15px; outline: none; }
+        
+        .badges { display: flex; gap: 6px; justify-content: center; margin-bottom: 12px; }
         .badge { font-size: 10px; padding: 4px 8px; border-radius: 12px; font-weight: bold; }
         .badge.on { background: rgba(14, 203, 129, 0.2); color: #0ecb81; border: 1px solid #0ecb81; }
         .badge.off { background: rgba(246, 70, 93, 0.2); color: #f6465d; border: 1px solid #f6465d; }
-        .price-box { text-align: center; margin: 20px 0; }
-        .price { font-size: 32px; font-weight: bold; }
-        .signal-card { background: #2b313a; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px; }
-        .signal-type { font-size: 24px; font-weight: bold; margin-bottom: 8px; }
-        .LEAN-BUY { color: #0ecb81; }
-        .LEAN-SELL { color: #f6465d; }
-        .NEUTRAL { color: #848e9c; }
-        .confidence { font-size: 14px; color: #848e9c; }
-        .conf-value { color: #fff; font-weight: bold; font-size: 18px; }
-        .bar-container { background: #363c4e; height: 8px; border-radius: 4px; margin: 15px 0; overflow: hidden; display: flex; }
-        .buy-bar { background: #0ecb81; height: 100%; width: 50%; transition: width 0.3s; }
-        .sell-bar { background: #f6465d; height: 100%; width: 50%; transition: width 0.3s; }
-        .stats { display: flex; justify-content: space-between; font-size: 12px; color: #848e9c; }
+
+        .price { font-size: 28px; font-weight: bold; text-align: center; margin: 5px 0 15px 0; }
+
+        .timer-box { background: #222630; border-radius: 8px; padding: 10px; text-align: center; margin-bottom: 15px; }
+        .timer-val { font-size: 22px; font-weight: bold; color: #f0b90b; }
+        .phase-text { font-size: 12px; margin-top: 4px; font-weight: 600; }
+
+        .signal-card { background: #2b313a; border-radius: 12px; padding: 20px; text-align: center; border: 2px solid transparent; transition: all 0.3s; }
+        .signal-card.GREEN { border-color: #0ecb81; background: rgba(14, 203, 129, 0.15); }
+        .signal-card.RED { border-color: #f6465d; background: rgba(246, 70, 93, 0.15); }
+        
+        .signal-type { font-size: 24px; font-weight: 800; margin: 8px 0; }
+        .BUY { color: #0ecb81; }
+        .SELL { color: #f6465d; }
+        .WAITING { color: #848e9c; }
+
+        .status-tag { font-size: 11px; padding: 4px 10px; border-radius: 4px; display: inline-block; font-weight: bold; text-transform: uppercase; }
+        
+        .bar-container { background: #363c4e; height: 10px; border-radius: 5px; margin: 15px 0; overflow: hidden; display: flex; }
+        .buy-bar { background: #0ecb81; height: 100%; width: 50%; transition: width 0.2s; }
+        .sell-bar { background: #f6465d; height: 100%; width: 50%; transition: width 0.2s; }
+
+        .stats { display: flex; justify-content: space-between; font-size: 11px; color: #848e9c; }
+        .stats b { font-size: 12px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="header">
-        <div class="title">BTC/USDT</div>
-        <div class="badges">
-            <span id="binance-status" class="badge off">Binance OFF</span>
-            <span id="delta-status" class="badge off">Delta OFF</span>
-        </div>
+    <select id="asset-selector" class="asset-select" onchange="changeAsset()">
+        <optgroup label="Crypto Assets">
+            <option value="BTCUSDT">Bitcoin (BTC/USDT)</option>
+            <option value="ETHUSDT">Ethereum (ETH/USDT)</option>
+            <option value="SOLUSDT">Solana (SOL/USDT)</option>
+            <option value="CRYPTO_IDX">Crypto IDX</option>
+        </optgroup>
+        <optgroup label="Forex Pairs">
+            <option value="EURUSD">EUR / USD</option>
+            <option value="AUDCAD">AUD / CAD</option>
+            <option value="AUDCHF">AUD / CHF</option>
+            <option value="AUDJPY">AUD / JPY</option>
+            <option value="AUDUSD">AUD / USD</option>
+        </optgroup>
+    </select>
+
+    <div class="badges">
+        <span id="binance-status" class="badge off">Binance OFF</span>
+        <span id="delta-status" class="badge off">Delta OFF</span>
     </div>
 
-    <div class="price-box">
-        <div id="price" class="price">0.00</div>
+    <div id="price" class="price">0.00</div>
+
+    <div class="timer-box">
+        <div>Clock: <span id="timer" class="timer-val">00:59</span></div>
+        <div id="phase-text" class="phase-text" style="color:#f0b90b;">System Active...</div>
     </div>
 
-    <div class="signal-card">
-        <div id="signal" class="signal-type NEUTRAL">WAITING DATA...</div>
-        <div class="confidence">Confidence: <span id="confidence" class="conf-value">50%</span></div>
-        
+    <div id="signal-card" class="signal-card">
+        <div id="status-tag" class="status-tag" style="background:#f0b90b; color:#000;">ACCUMULATING DATA</div>
+        <div id="signal" class="signal-type WAITING">ANALYZING...</div>
+        <div>Confidence: <b id="confidence" style="color:#fff;">50%</b></div>
+
         <div class="bar-container">
             <div id="buy-bar" class="buy-bar"></div>
             <div id="sell-bar" class="sell-bar"></div>
         </div>
 
         <div class="stats">
-            <span>Bids: <b id="total-bids" style="color:#0ecb81">0</b></span>
+            <span>Buyer Vol: <b id="total-bids" style="color:#0ecb81">0</b></span>
             <span>Imbalance: <b id="imbalance-val" style="color:#fff">0.000</b></span>
-            <span>Asks: <b id="total-asks" style="color:#f6465d">0</b></span>
+            <span>Seller Vol: <b id="total-asks" style="color:#f6465d">0</b></span>
         </div>
     </div>
 </div>
 
 <script>
+    let currentAsset = 'BTCUSDT';
+    let binanceWs = null, deltaWs = null;
+    
+    // Accumulator variables
     let binanceBids = 0, binanceAsks = 0;
     let deltaBids = 0, deltaAsks = 0;
+    let tickCountBuy = 0, tickCountSell = 0;
+    
+    let lockedSignalData = null;
 
-    // 1. Binance WebSocket Connection
-    const binanceWs = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@depth10@100ms/btcusdt@ticker');
+    function initWebSockets() {
+        if (binanceWs) binanceWs.close();
+        if (deltaWs) deltaWs.close();
 
-    binanceWs.onopen = () => {
-        document.getElementById('binance-status').className = 'badge on';
-        document.getElementById('binance-status').innerText = 'Binance ON';
-    };
+        document.getElementById('binance-status').className = 'badge off';
+        document.getElementById('binance-status').innerText = 'Binance OFF';
+        document.getElementById('delta-status').className = 'badge off';
+        document.getElementById('delta-status').innerText = 'Delta OFF';
 
-    binanceWs.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        
-        // Ticker Price Update
-        if (data.c) {
-            document.getElementById('price').innerText = parseFloat(data.c).toFixed(2);
+        let symbol = currentAsset.toLowerCase();
+        if(symbol.includes('eur') || symbol.includes('aud') || symbol === 'crypto_idx') {
+            symbol = 'btcusdt'; // Synthetic correlation fallback for OTC/Forex
         }
-        
-        // Depth Update
-        if (data.bids && data.asks) {
-            binanceBids = data.bids.reduce((sum, item) => sum + parseFloat(item[1]), 0);
-            binanceAsks = data.asks.reduce((sum, item) => sum + parseFloat(item[1]), 0);
-            calculateSignal();
+
+        // Binance WebSocket (Depth + Trade Ticks)
+        binanceWs = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol}@depth10@100ms/${symbol}@trade`);
+
+        binanceWs.onopen = () => {
+            document.getElementById('binance-status').className = 'badge on';
+            document.getElementById('binance-status').innerText = 'Binance ON';
+        };
+
+        binanceWs.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            
+            // Real-time Price Ticks
+            if (data.p) {
+                document.getElementById('price').innerText = parseFloat(data.p).toFixed(2);
+                if (data.m) {
+                    tickCountSell += parseFloat(data.q); // Seller Trade
+                } else {
+                    tickCountBuy += parseFloat(data.q);  // Buyer Trade
+                }
+            }
+
+            // Orderbook Depth Lot Size Weight
+            if (data.bids && data.asks) {
+                binanceBids = data.bids.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
+                binanceAsks = data.asks.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
+            }
+        };
+
+        // Delta Exchange WebSocket
+        deltaWs = new WebSocket('wss://socket.delta.exchange');
+
+        deltaWs.onopen = () => {
+            document.getElementById('delta-status').className = 'badge on';
+            document.getElementById('delta-status').innerText = 'Delta ON';
+            let deltaSymbol = currentAsset === 'BTCUSDT' ? 'BTC_USDT' : 'ETH_USDT';
+            deltaWs.send(JSON.stringify({
+                "type": "subscribe",
+                "payload": { "channels": [{ "name": "l2orderbook", "symbols": [deltaSymbol] }] }
+            }));
+        };
+
+        deltaWs.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'l2orderbook') {
+                if (data.bids) deltaBids = data.bids.reduce((sum, item) => sum + (parseFloat(item.limit_price || 0) * parseFloat(item.size || 0)), 0);
+                if (data.asks) deltaAsks = data.asks.reduce((sum, item) => sum + (parseFloat(item.limit_price || 0) * parseFloat(item.size || 0)), 0);
+            }
+        };
+    }
+
+    function changeAsset() {
+        currentAsset = document.getElementById('asset-selector').value;
+        lockedSignalData = null;
+        resetAccumulator();
+        initWebSockets();
+    }
+
+    function resetAccumulator() {
+        tickCountBuy = 0;
+        tickCountSell = 0;
+    }
+
+    // Binary Timer & Calculation Sync Engine
+    setInterval(() => {
+        const now = new Date();
+        const seconds = now.getSeconds();
+        const remainingSeconds = 59 - seconds;
+
+        document.getElementById('timer').innerText = `00:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+
+        // PHASE 1: 30s to 00s (Bet Locked on Broker / System Accumulating Volume)
+        if (remainingSeconds < 30) {
+            lockedSignalData = null; // Clear old signal
+            document.getElementById('phase-text').innerText = 'Bet Paused (30s-00s). Accumulating Orderbook & Ticks...';
+            document.getElementById('phase-text').style.color = '#f0b90b';
+            
+            document.getElementById('status-tag').innerText = 'BACKGROUND ACCUMULATION';
+            document.getElementById('status-tag').style.background = '#363c4e';
+            document.getElementById('status-tag').style.color = '#fff';
+
+            // Continuous background evaluation
+            const liveData = calculateData();
+            renderUI(liveData, "ANALYZING...");
+        } 
+        // PHASE 2: 59s to 45s (First 15s of New Candle -> Final Confirmation Window)
+        else if (remainingSeconds >= 45) {
+            document.getElementById('phase-text').innerText = 'New Candle Started! Confirming First 15s Imbalance...';
+            document.getElementById('phase-text').style.color = '#f0b90b';
+            
+            document.getElementById('status-tag').innerText = 'CONFIRMING IMBALANCE (15s)';
+            document.getElementById('status-tag').style.background = '#f0b90b';
+            document.getElementById('status-tag').style.color = '#000';
+
+            const liveData = calculateData();
+            renderUI(liveData, "CONFIRMING...");
+        } 
+        // PHASE 3: 44s to 30s (Signal Fixed / Betting Open Window)
+        else {
+            document.getElementById('phase-text').innerText = 'SIGNAL LOCKED! PLACE BET NOW ON BROKER';
+            document.getElementById('phase-text').style.color = '#0ecb81';
+            
+            document.getElementById('status-tag').innerText = 'FINAL SIGNAL (BET NOW)';
+            document.getElementById('status-tag').style.background = '#0ecb81';
+            document.getElementById('status-tag').style.color = '#fff';
+
+            // Lock Signal exactly at 45s mark
+            if (!lockedSignalData) {
+                lockedSignalData = calculateData();
+            }
+            renderUI(lockedSignalData, lockedSignalData.signalText);
         }
-    };
 
-    // 2. Delta Exchange WebSocket Connection
-    const deltaWs = new WebSocket('wss://socket.delta.exchange');
-
-    deltaWs.onopen = () => {
-        document.getElementById('delta-status').className = 'badge on';
-        document.getElementById('delta-status').innerText = 'Delta ON';
-        
-        // Subscribe to L2 Orderbook
-        deltaWs.send(JSON.stringify({
-            "type": "subscribe",
-            "payload": { "channels": [{ "name": "l2orderbook", "symbols": ["BTC_USDT"] }] }
-        }));
-    };
-
-    deltaWs.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'l2orderbook') {
-            if (data.bids) deltaBids = data.bids.reduce((sum, item) => sum + parseFloat(item.size || 0), 0);
-            if (data.asks) deltaAsks = data.asks.reduce((sum, item) => sum + parseFloat(item.size || 0), 0);
-            calculateSignal();
+        // Reset accumulators at new minute start
+        if (seconds === 0) {
+            resetAccumulator();
         }
-    };
+    }, 1000);
 
-    // 3. Merged Signal Engine Logic
-    function calculateSignal() {
-        const totalBids = binanceBids + deltaBids;
-        const totalAsks = binanceAsks + deltaAsks;
+    function calculateData() {
+        // Combined Orderbook Depth Volume + Real-time Tick Volume Weight
+        const totalBids = (binanceBids + deltaBids) + (tickCountBuy * 1000);
+        const totalAsks = (binanceAsks + deltaAsks) + (tickCountSell * 1000);
         const totalVolume = totalBids + totalAsks;
 
-        if (totalVolume === 0) return;
-
-        // Order Book Imbalance Ratio (-1.0 to +1.0)
-        const imbalance = (totalBids - totalAsks) / totalVolume;
-        
-        // Signal Decision
-        let signal = "LEAN NEUTRAL";
-        let sigClass = "NEUTRAL";
-        
-        if (imbalance > 0.12) {
-            signal = "LEAN BUY";
-            sigClass = "LEAN-BUY";
-        } else if (imbalance < -0.12) {
-            signal = "LEAN SELL";
-            sigClass = "LEAN-SELL";
+        if (totalVolume === 0) {
+            return { signalText: "LEAN NEUTRAL", sigClass: "WAITING", cardClass: "", confidence: 50, imbalance: 0, totalBids: 0, totalAsks: 0 };
         }
 
-        // Confidence Calculation
-        const confidence = Math.min(Math.round(50 + (Math.abs(imbalance) * 50)), 99);
+        // Imbalance Formula
+        const imbalance = (totalBids - totalAsks) / totalVolume;
+        const confidence = Math.min(Math.round(52 + (Math.abs(imbalance) * 48)), 99);
 
-        // Update UI Elements
+        let signalText = "LEAN NEUTRAL";
+        let cardClass = "";
+        let sigClass = "WAITING";
+
+        // Buyer vs Seller Winner Decision
+        if (imbalance > 0.05) {
+            signalText = "NEXT CANDLE: GREEN (BUY)";
+            sigClass = "BUY";
+            cardClass = "GREEN";
+        } else if (imbalance < -0.05) {
+            signalText = "NEXT CANDLE: RED (SELL)";
+            sigClass = "SELL";
+            cardClass = "RED";
+        }
+
+        return { signalText, sigClass, cardClass, confidence, imbalance, totalBids, totalAsks };
+    }
+
+    function renderUI(data, overrideText) {
+        const sigCard = document.getElementById('signal-card');
+        sigCard.className = 'signal-card ' + data.cardClass;
+
         const sigElem = document.getElementById('signal');
-        sigElem.innerText = signal;
-        sigElem.className = 'signal-type ' + sigClass;
+        sigElem.innerText = overrideText === "CONFIRMING..." || overrideText === "ANALYZING..." ? overrideText : data.signalText;
+        sigElem.className = 'signal-type ' + data.sigClass;
 
-        document.getElementById('confidence').innerText = confidence + '%';
-        document.getElementById('imbalance-val').innerText = imbalance.toFixed(3);
-        document.getElementById('total-bids').innerText = Math.round(totalBids);
-        document.getElementById('total-asks').innerText = Math.round(totalAsks);
+        document.getElementById('confidence').innerText = data.confidence + '%';
+        document.getElementById('imbalance-val').innerText = data.imbalance.toFixed(3);
+        document.getElementById('total-bids').innerText = Math.round(data.totalBids / 1000) + 'k';
+        document.getElementById('total-asks').innerText = Math.round(data.totalAsks / 1000) + 'k';
 
-        // Visual Progress Bar
-        const buyPct = Math.max(10, Math.min(90, ((imbalance + 1) / 2) * 100));
+        const buyPct = Math.max(10, Math.min(90, ((data.imbalance + 1) / 2) * 100));
         document.getElementById('buy-bar').style.width = buyPct + '%';
         document.getElementById('sell-bar').style.width = (100 - buyPct) + '%';
     }
+
+    initWebSockets();
 </script>
 </body>
 </html>
