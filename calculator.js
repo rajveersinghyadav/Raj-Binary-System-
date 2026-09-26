@@ -1,23 +1,10 @@
 class CryptoIDXCalculator {
     static compute(multiStreamData) {
         if (!multiStreamData) {
-            return {
-                signalText: "WAITING DATA",
-                confidence: 0,
-                sigClass: "WAITING",
-                cardClass: "",
-                buyerAggressive: false,
-                sellerAggressive: false,
-                buyVol: 0,
-                sellVol: 0,
-                aggressionRatio: 0,
-                imbalance: 0,
-                totalBids: 0,
-                totalAsks: 0
-            };
+            return this.getEmptyState("WAITING STREAM DATA");
         }
 
-        // Exact Binomo Crypto IDX Weightage Matrix
+        // Binomo Crypto IDX Exact Weights
         const weights = {
             btc: 0.40,
             eth: 0.30,
@@ -25,95 +12,103 @@ class CryptoIDXCalculator {
             zec: 0.15
         };
 
-        let weightedTotalBids = 0;
-        let weightedTotalAsks = 0;
-        let weightedBuyVol = 0;
-        let weightedSellVol = 0;
-        let activeStreams = 0;
+        let totalWeightedBidsVal = 0;
+        let totalWeightedAsksVal = 0;
+        let totalWeightedBuyVol = 0;
+        let totalWeightedSellVol = 0;
+        let activeCoinsCount = 0;
 
-        // 1. ALL 4 ORDERBOOKS (BTC, ETH, LTC, ZEC) MERGED CALCULATION
         for (let coin in weights) {
             const data = multiStreamData[coin];
-            if (data && data.bids && data.asks && data.bids.length > 0 && data.asks.length > 0) {
-                // Individual Coin Bids & Asks Vol Calculation (Price * Qty)
-                const coinBids = data.bids.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
-                const coinAsks = data.asks.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
+            
+            if (data && data.bids && data.asks && data.bids.length > 0) {
+                activeCoinsCount++;
 
-                // Multiply with Weightage Factor
-                weightedTotalBids += coinBids * weights[coin];
-                weightedTotalAsks += coinAsks * weights[coin];
+                // Orderbook Dollar Volume (Price * Quantity)
+                let coinBidsValue = 0;
+                let coinAsksValue = 0;
 
-                // Aggression Trade Volumes with Weightage
-                weightedBuyVol += (data.buyVol || 0) * weights[coin];
-                weightedSellVol += (data.sellVol || 0) * weights[coin];
+                for (let i = 0; i < Math.min(5, data.bids.length); i++) {
+                    coinBidsValue += parseFloat(data.bids[i][0]) * parseFloat(data.bids[i][1]);
+                }
 
-                activeStreams++;
+                for (let i = 0; i < Math.min(5, data.asks.length); i++) {
+                    coinAsksValue += parseFloat(data.asks[i][0]) * parseFloat(data.asks[i][1]);
+                }
+
+                totalWeightedBidsVal += coinBidsValue * weights[coin];
+                totalWeightedAsksVal += coinAsksValue * weights[coin];
+
+                // Aggression Trade Volume
+                totalWeightedBuyVol += (data.buyVol || 0) * weights[coin];
+                totalWeightedSellVol += (data.sellVol || 0) * weights[coin];
             }
         }
 
-        if (activeStreams < 2) {
-            return {
-                signalText: "SYNCING 4 STREAMS...",
-                confidence: 0,
-                sigClass: "WAITING",
-                cardClass: "",
-                buyerAggressive: false,
-                sellerAggressive: false,
-                buyVol: 0,
-                sellVol: 0,
-                aggressionRatio: 0,
-                imbalance: 0,
-                totalBids: 0,
-                totalAsks: 0
-            };
+        if (activeCoinsCount === 0) {
+            return this.getEmptyState("SYNCING 4 STREAMS...");
         }
 
-        // 2. COMBINED 4-ASSET NET IMBALANCE CALCULATION
-        const grandTotalDepth = weightedTotalBids + weightedTotalAsks;
-        const combinedImbalance = grandTotalDepth > 0 ? (weightedTotalBids - weightedTotalAsks) / grandTotalDepth : 0;
+        // Combined Depth Imbalance (-1.0 to +1.0)
+        const totalDepthVal = totalWeightedBidsVal + totalWeightedAsksVal;
+        const imbalance = totalDepthVal > 0 ? (totalWeightedBidsVal - totalWeightedAsksVal) / totalDepthVal : 0;
 
-        // 3. COMBINED 4-ASSET AGGRESSION RATIO CALCULATION
-        const grandTotalTrades = weightedBuyVol + weightedSellVol;
-        const combinedAggression = grandTotalTrades > 0 ? (weightedBuyVol - weightedSellVol) / grandTotalTrades : 0;
+        // Combined Trade Aggression (-1.0 to +1.0)
+        const totalTradeVol = totalWeightedBuyVol + totalWeightedSellVol;
+        const aggressionRatio = totalTradeVol > 0 ? (totalWeightedBuyVol - totalWeightedSellVol) / totalTradeVol : 0;
 
-        // 4. COMPOSITE INDEX SCORE (40% Orderbooks Imbalance + 60% Trades Aggression)
-        const compositeScore = (combinedImbalance * 0.4) + (combinedAggression * 0.6);
+        // Final Composite Score (40% Orderbook Depth + 60% Trades Aggression)
+        const compositeScore = (imbalance * 0.40) + (aggressionRatio * 0.60);
 
         let signalText = "WAITING / NEUTRAL";
         let sigClass = "WAITING";
         let cardClass = "";
         let confidence = 50;
 
-        let buyerAggressive = combinedAggression > 0.05;
-        let sellerAggressive = combinedAggression < -0.05;
-
-        // 5. NEXT CANDLE PREDICTION RULES
-        if (compositeScore > 0.015 && combinedImbalance > 0) {
-            signalText = "NEXT CANDLE: GREEN (BUY)";
+        // Strict Signal Threshold to Prevent Losses
+        if (compositeScore > 0.08 && imbalance > 0.02) {
+            signalText = "NEXT CANDLE: CALL (GREEN)";
             sigClass = "BUY";
             cardClass = "GREEN";
-            confidence = Math.min(Math.round(70 + (Math.abs(compositeScore) * 80)), 98);
-        } else if (compositeScore < -0.015 && combinedImbalance < 0) {
-            signalText = "NEXT CANDLE: RED (SELL)";
+            confidence = Math.min(98, Math.round(75 + (compositeScore * 100)));
+        } else if (compositeScore < -0.08 && imbalance < -0.02) {
+            signalText = "NEXT CANDLE: PUT (RED)";
             sigClass = "SELL";
             cardClass = "RED";
-            confidence = Math.min(Math.round(70 + (Math.abs(compositeScore) * 80)), 98);
+            confidence = Math.min(98, Math.round(75 + (Math.abs(compositeScore) * 100)));
         }
 
         return {
-            imbalance: combinedImbalance,
-            aggressionRatio: combinedAggression,
+            imbalance: imbalance,
+            aggressionRatio: aggressionRatio,
             compositeScore: compositeScore,
-            totalBids: weightedTotalBids,
-            totalAsks: weightedTotalAsks,
-            buyVol: weightedBuyVol,
-            sellVol: weightedSellVol,
-            buyerAggressive,
-            sellerAggressive,
-            signalText,
-            confidence,
-            sigClass,
-            cardClass
+            totalBids: totalWeightedBidsVal,
+            totalAsks: totalWeightedAsksVal,
+            buyVol: totalWeightedBuyVol,
+            sellVol: totalWeightedSellVol,
+            buyerAggressive: aggressionRatio > 0.1,
+            sellerAggressive: aggressionRatio < -0.1,
+            signalText: signalText,
+            confidence: confidence,
+            sigClass: sigClass,
+            cardClass: cardClass
+        };
+    }
+
+    static getEmptyState(msg) {
+        return {
+            signalText: msg,
+            confidence: 0,
+            sigClass: "WAITING",
+            cardClass: "",
+            buyerAggressive: false,
+            sellerAggressive: false,
+            buyVol: 0,
+            sellVol: 0,
+            aggressionRatio: 0,
+            imbalance: 0,
+            totalBids: 0,
+            totalAsks: 0
         };
     }
 }
