@@ -1,4 +1,4 @@
-// Dual-Exchange Live Streamer (Binance + Yahoo Interbank Depth)
+// Multi-Exchange Orderbook & Aggression Streamer
 class DataStreamer {
     constructor(assetConfig, onPriceUpdate, onDepthUpdate) {
         this.config = assetConfig;
@@ -8,24 +8,24 @@ class DataStreamer {
         this.yahooInterval = null;
         this.isConnected = false;
         
-        // Binance Orderbook Arrays
         this.binanceBids = [];
         this.binanceAsks = [];
         
-        // Yahoo Interbank Depth Weights
         this.yahooBidsWeight = 0;
         this.yahooAsksWeight = 0;
         this.lastYahooPrice = 0;
 
-        this.buyTicks = 0;
-        this.sellTicks = 0;
+        // Trade Aggression Counters
+        this.buyMarketVol = 0;
+        this.sellMarketVol = 0;
+        this.buyTradesCount = 0;
+        this.sellTradesCount = 0;
     }
 
     start() {
         if (this.binanceWs) this.binanceWs.close();
         if (this.yahooInterval) clearInterval(this.yahooInterval);
 
-        // 1. BINANCE LIVE STREAM (Bids & Asks Orderbook + Trades)
         this.binanceWs = new WebSocket(`wss://stream.binance.com:9443/ws/${this.config.streamSymbol}@depth10@100ms/${this.config.streamSymbol}@trade`);
 
         this.binanceWs.onopen = () => {
@@ -35,7 +35,8 @@ class DataStreamer {
         this.binanceWs.onmessage = (event) => {
             const data = JSON.parse(event.data);
 
-            if (data.p) {
+            // Real Trade Aggression Monitoring
+            if (data.p && data.q) {
                 let price = parseFloat(data.p);
                 if (this.config.isIdx) price = (price * 0.125) + 250;
                 
@@ -43,10 +44,17 @@ class DataStreamer {
                     this.onPriceUpdate(price);
                 }
 
-                if (data.m) this.sellTicks += parseFloat(data.q);
-                else this.buyTicks += parseFloat(data.q);
+                // Market Buy vs Market Sell Vol
+                if (data.m) {
+                    this.sellMarketVol += parseFloat(data.q);
+                    this.sellTradesCount += 1;
+                } else {
+                    this.buyMarketVol += parseFloat(data.q);
+                    this.buyTradesCount += 1;
+                }
             }
 
+            // Real Order Book Depth Stream
             if (data.bids || data.b) {
                 this.binanceBids = (data.bids || data.b).slice(0, 5);
                 this.binanceAsks = (data.asks || data.a).slice(0, 5);
@@ -54,10 +62,9 @@ class DataStreamer {
             }
         };
 
-        // 2. YAHOO INTERBANK REAL-TIME DEPTH STREAM
         if (this.config.yahooSymbol) {
             this.fetchYahooDepth();
-            this.yahooInterval = setInterval(() => this.fetchYahooDepth(), 1000); // 1-Second Fast Polling
+            this.yahooInterval = setInterval(() => this.fetchYahooDepth(), 1000);
         }
 
         this.binanceWs.onerror = this.binanceWs.onclose = () => {
@@ -82,17 +89,17 @@ class DataStreamer {
                 if (this.lastYahooPrice !== 0) {
                     const diff = price - this.lastYahooPrice;
                     if (diff > 0) {
-                        this.yahooBidsWeight += Math.abs(diff) * 500000; // Live Buyer Volume Injection
+                        this.yahooBidsWeight += Math.abs(diff) * 600000;
+                        this.buyMarketVol += Math.abs(diff) * 300000;
                     } else if (diff < 0) {
-                        this.yahooAsksWeight += Math.abs(diff) * 500000; // Live Seller Volume Injection
+                        this.yahooAsksWeight += Math.abs(diff) * 600000;
+                        this.sellMarketVol += Math.abs(diff) * 300000;
                     }
                 }
                 this.lastYahooPrice = price;
                 this.emitMergedDepth();
             }
-        } catch (e) {
-            // Stream Fallback Active
-        }
+        } catch (e) {}
     }
 
     emitMergedDepth() {
@@ -101,14 +108,18 @@ class DataStreamer {
             asks: this.binanceAsks,
             yahooBidsWeight: this.yahooBidsWeight,
             yahooAsksWeight: this.yahooAsksWeight,
-            buyTicks: this.buyTicks,
-            sellTicks: this.sellTicks
+            buyMarketVol: this.buyMarketVol,
+            sellMarketVol: this.sellMarketVol,
+            buyTradesCount: this.buyTradesCount,
+            sellTradesCount: this.sellTradesCount
         });
     }
 
     resetTicks() {
-        this.buyTicks = 0;
-        this.sellTicks = 0;
+        this.buyMarketVol = 0;
+        this.sellMarketVol = 0;
+        this.buyTradesCount = 0;
+        this.sellTradesCount = 0;
         this.yahooBidsWeight = 0;
         this.yahooAsksWeight = 0;
     }
