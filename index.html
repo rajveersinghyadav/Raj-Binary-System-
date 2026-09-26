@@ -57,11 +57,13 @@
 
 <div class="container">
     <select id="asset-selector" class="asset-select" onchange="switchAssetWithReload()">
+        <optgroup label="Composite Indexes">
+            <option value="CRYPTO_IDX">Binomo Crypto IDX (BTC+ETH+LTC+ZEC)</option>
+        </optgroup>
         <optgroup label="Crypto Assets">
             <option value="BTCUSDT">Bitcoin (BTC/USDT)</option>
             <option value="ETHUSDT">Ethereum (ETH/USDT)</option>
             <option value="SOLUSDT">Solana (SOL/USDT)</option>
-            <option value="CRYPTO_IDX">Crypto IDX</option>
         </optgroup>
         <optgroup label="Forex Pairs">
             <option value="EURUSD">EUR / USD</option>
@@ -140,7 +142,7 @@
 
 <script>
     const urlParams = new URLSearchParams(window.location.search);
-    let currentAsset = urlParams.get('asset') || 'BTCUSDT';
+    let currentAsset = urlParams.get('asset') || 'CRYPTO_IDX';
     
     document.getElementById('asset-selector').value = currentAsset;
 
@@ -150,10 +152,10 @@
     }
 
     const assetRegistry = {
+        'CRYPTO_IDX': { isIdx: true, isForex: false },
         'BTCUSDT': { streamSymbol: 'btcusdt', yahooSymbol: 'BTC-USD', decimals: 2, isForex: false },
         'ETHUSDT': { streamSymbol: 'ethusdt', yahooSymbol: 'ETH-USD', decimals: 2, isForex: false },
         'SOLUSDT': { streamSymbol: 'solusdt', yahooSymbol: 'SOL-USD', decimals: 2, isForex: false },
-        'CRYPTO_IDX': { streamSymbol: 'btcusdt', yahooSymbol: 'BTC-USD', decimals: 2, isIdx: true, isForex: false },
         'EURUSD': { streamSymbol: 'eurusdt', yahooSymbol: 'EURUSD=X', decimals: 5, isForex: true },
         'AUDCAD': { streamSymbol: 'audusdt', yahooSymbol: 'AUDCAD=X', decimals: 5, isForex: true },
         'AUDCHF': { streamSymbol: 'audusdt', yahooSymbol: 'AUDCHF=X', decimals: 5, isForex: true },
@@ -161,37 +163,49 @@
         'AUDUSD': { streamSymbol: 'audusdt', yahooSymbol: 'AUDUSD=X', decimals: 5, isForex: true }
     };
 
-    const config = assetRegistry[currentAsset] || assetRegistry['BTCUSDT'];
+    const config = assetRegistry[currentAsset] || assetRegistry['CRYPTO_IDX'];
 
     let latestDepthData = null;
     let lockedSignal = null;
+    let streamer = null;
 
-    const streamer = new DataStreamer(
-        config,
-        (livePrice) => {
-            document.getElementById('price').innerText = livePrice.toFixed(config.decimals);
-        },
-        (depthData) => {
-            latestDepthData = depthData;
-            renderOrderBookUI(depthData);
-        }
-    );
+    // Handle Crypto IDX Multi-Stream vs Single Asset Stream
+    if (config.isIdx && typeof CryptoIDXStreamer !== 'undefined') {
+        document.getElementById('price').innerText = "4-ASSET INDEX";
+        streamer = new CryptoIDXStreamer((multiData) => {
+            latestDepthData = multiData;
+            if (multiData && multiData.btc && multiData.btc.bids) {
+                renderOrderBookUI(multiData.btc, 2);
+            }
+        });
+        streamer.connect();
+    } else {
+        streamer = new DataStreamer(
+            config,
+            (livePrice) => {
+                document.getElementById('price').innerText = livePrice.toFixed(config.decimals || 2);
+            },
+            (depthData) => {
+                latestDepthData = depthData;
+                renderOrderBookUI(depthData, config.decimals || 2);
+            }
+        );
+        streamer.start();
+    }
 
-    streamer.start();
-
-    function renderOrderBookUI(data) {
+    function renderOrderBookUI(data, decimals) {
         let bidsHtml = '';
         let asksHtml = '';
 
-        if (data.bids) {
-            data.bids.forEach(b => {
-                bidsHtml += `<div class="book-row"><span class="bid-p">${parseFloat(b[0]).toFixed(config.decimals)}</span><span>${parseFloat(b[1]).toFixed(2)}</span></div>`;
+        if (data && data.bids) {
+            data.bids.slice(0, 5).forEach(b => {
+                bidsHtml += `<div class="book-row"><span class="bid-p">${parseFloat(b[0]).toFixed(decimals)}</span><span>${parseFloat(b[1]).toFixed(2)}</span></div>`;
             });
         }
 
-        if (data.asks) {
-            data.asks.forEach(a => {
-                asksHtml += `<div class="book-row"><span class="ask-p">${parseFloat(a[0]).toFixed(config.decimals)}</span><span>${parseFloat(a[1]).toFixed(2)}</span></div>`;
+        if (data && data.asks) {
+            data.asks.slice(0, 5).forEach(a => {
+                asksHtml += `<div class="book-row"><span class="ask-p">${parseFloat(a[0]).toFixed(decimals)}</span><span>${parseFloat(a[1]).toFixed(2)}</span></div>`;
             });
         }
 
@@ -206,9 +220,17 @@
 
         document.getElementById('timer').innerText = `00:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
 
-        if (!streamer.isConnected || !latestDepthData) return;
+        if (!latestDepthData) return;
 
-        const calc = SignalCalculator.compute(latestDepthData);
+        // Calculate Signal based on Asset Type
+        let calc;
+        if (config.isIdx && typeof CryptoIDXCalculator !== 'undefined') {
+            calc = CryptoIDXCalculator.compute(latestDepthData);
+        } else if (typeof SignalCalculator !== 'undefined') {
+            calc = SignalCalculator.compute(latestDepthData, config.isForex);
+        } else {
+            return;
+        }
 
         // 01-SECOND SIGNAL LOCK & EXECUTION ENGINE
         if (remainingSeconds === 59 || seconds === 1) { // EXACT CANDLE OPEN (01s)
@@ -226,25 +248,29 @@
         }
 
         if (seconds === 0) {
-            streamer.resetTicks();
+            if (streamer && streamer.resetTradeVolumes) {
+                streamer.resetTradeVolumes();
+            } else if (streamer && streamer.resetTicks) {
+                streamer.resetTicks();
+            }
         }
     }, 1000);
 
     function renderSignalUI(calc, overrideText) {
-        document.getElementById('signal-card').className = 'signal-card ' + calc.cardClass;
+        document.getElementById('signal-card').className = 'signal-card ' + (calc.cardClass || '');
 
         const sigElem = document.getElementById('signal');
         sigElem.innerText = overrideText === "CALCULATING STREAM..." ? overrideText : calc.signalText;
-        sigElem.className = 'signal-type ' + calc.sigClass;
+        sigElem.className = 'signal-type ' + (calc.sigClass || 'WAITING');
 
-        document.getElementById('confidence').innerText = calc.confidence + '%';
+        document.getElementById('confidence').innerText = (calc.confidence || 0) + '%';
 
         // Aggression Window UI Updates
         const aggElem = document.getElementById('agg-status');
-        if (calc.buyerAggressive) {
+        if (calc.buyerAggressive || (calc.combinedAggression > 0.02)) {
             aggElem.innerText = "BUYERS HIGHLY AGGRESSIVE 🔥";
             aggElem.style.color = "#0ecb81";
-        } else if (calc.sellerAggressive) {
+        } else if (calc.sellerAggressive || (calc.combinedAggression < -0.02)) {
             aggElem.innerText = "SELLERS HIGHLY AGGRESSIVE ⚡";
             aggElem.style.color = "#f6465d";
         } else {
@@ -254,22 +280,28 @@
 
         document.getElementById('buy-agg-val').innerText = Math.round(calc.buyVol || 0);
         document.getElementById('sell-agg-val').innerText = Math.round(calc.sellVol || 0);
-        document.getElementById('agg-ratio-val').innerText = (calc.aggressionRatio || 0).toFixed(3);
+        
+        const aggRatio = calc.aggressionRatio || parseFloat(calc.combinedAggression) || 0;
+        document.getElementById('agg-ratio-val').innerText = typeof aggRatio === 'number' ? aggRatio.toFixed(3) : aggRatio;
 
-        const aggPct = Math.max(10, Math.min(90, (((calc.aggressionRatio || 0) + 1) / 2) * 100));
+        const aggPct = Math.max(10, Math.min(90, ((aggRatio + 1) / 2) * 100));
         document.getElementById('agg-buy-bar').style.width = aggPct + '%';
         document.getElementById('agg-sell-bar').style.width = (100 - aggPct) + '%';
 
         // Lot Imbalance UI Updates
-        document.getElementById('imbalance-val').innerText = calc.imbalance.toFixed(3);
+        const imbVal = calc.imbalance !== undefined ? calc.imbalance : parseFloat(calc.combinedImbalance) || 0;
+        document.getElementById('imbalance-val').innerText = typeof imbVal === 'number' ? imbVal.toFixed(3) : imbVal;
 
-        let bidsFormatted = calc.totalBids > 1000000 ? (calc.totalBids/1000000).toFixed(1) + 'M' : Math.round(calc.totalBids / 1000) + 'k';
-        let asksFormatted = calc.totalAsks > 1000000 ? (calc.totalAsks/1000000).toFixed(1) + 'M' : Math.round(calc.totalAsks / 1000) + 'k';
+        let totalBids = calc.totalBids || 0;
+        let totalAsks = calc.totalAsks || 0;
+
+        let bidsFormatted = totalBids > 1000000 ? (totalBids/1000000).toFixed(1) + 'M' : Math.round(totalBids / 1000) + 'k';
+        let asksFormatted = totalAsks > 1000000 ? (totalAsks/1000000).toFixed(1) + 'M' : Math.round(totalAsks / 1000) + 'k';
 
         document.getElementById('total-bids').innerText = bidsFormatted;
         document.getElementById('total-asks').innerText = asksFormatted;
 
-        const buyPct = Math.max(10, Math.min(90, ((calc.imbalance + 1) / 2) * 100));
+        const buyPct = Math.max(10, Math.min(90, ((imbVal + 1) / 2) * 100));
         document.getElementById('buy-bar').style.width = buyPct + '%';
         document.getElementById('sell-bar').style.width = (100 - buyPct) + '%';
     }
