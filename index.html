@@ -129,17 +129,18 @@
         window.location.href = window.location.pathname + '?asset=' + selected;
     }
 
-    const assetRegistry = {
-        'BTCUSDT': { stream: 'btcusdt@depth5@100ms/btcusdt@trade', decimals: 2 },
-        'ETHUSDT': { stream: 'ethusdt@depth5@100ms/ethusdt@trade', decimals: 2 },
-        'SOLUSDT': { stream: 'solusdt@depth5@100ms/solusdt@trade', decimals: 2 },
-        'CRYPTO_IDX': { stream: 'btcusdt@depth5@100ms/btcusdt@trade', decimals: 2, isIdx: true },
-        'EURUSD': { stream: 'eurusdt@depth5@100ms/eurusdt@trade', decimals: 5 },
-        'AUDCAD': { stream: 'audusdt@depth5@100ms/audusdt@trade', decimals: 5 },
-        'AUDCHF': { stream: 'audusdt@depth5@100ms/audusdt@trade', decimals: 5 },
-        'AUDJPY': { stream: 'audusdt@depth5@100ms/audusdt@trade', decimals: 3 },
-        'AUDUSD': { stream: 'audusdt@depth5@100ms/audusdt@trade', decimals: 5 }
+        const assetRegistry = {
+        'BTCUSDT': { streamSymbol: 'btcusdt', yahooSymbol: 'BTC-USD', decimals: 2, isForex: false },
+        'ETHUSDT': { streamSymbol: 'ethusdt', yahooSymbol: 'ETH-USD', decimals: 2, isForex: false },
+        'SOLUSDT': { streamSymbol: 'solusdt', yahooSymbol: 'SOL-USD', decimals: 2, isForex: false },
+        'CRYPTO_IDX': { streamSymbol: 'btcusdt', yahooSymbol: 'BTC-USD', decimals: 2, isIdx: true, isForex: false },
+        'EURUSD': { streamSymbol: 'eurusdt', yahooSymbol: 'EURUSD=X', decimals: 5, isForex: true },
+        'AUDCAD': { streamSymbol: 'audusdt', yahooSymbol: 'AUDCAD=X', decimals: 5, isForex: true },
+        'AUDCHF': { streamSymbol: 'audusdt', yahooSymbol: 'AUDCHF=X', decimals: 5, isForex: true },
+        'AUDJPY': { streamSymbol: 'audusdt', yahooSymbol: 'AUDJPY=X', decimals: 3, isForex: true },
+        'AUDUSD': { streamSymbol: 'audusdt', yahooSymbol: 'AUDUSD=X', decimals: 5, isForex: true }
     };
+
 
     const config = assetRegistry[currentAsset] || assetRegistry['BTCUSDT'];
 
