@@ -194,24 +194,43 @@
     }
 
     function renderOrderBookUI(data, decimals) {
-        let bidsHtml = '';
-        let asksHtml = '';
+    let bidsHtml = '';
+    let asksHtml = '';
 
-        if (data && data.bids) {
-            data.bids.slice(0, 5).forEach(b => {
-                bidsHtml += `<div class="book-row"><span class="bid-p">${parseFloat(b[0]).toFixed(decimals)}</span><span>${parseFloat(b[1]).toFixed(2)}</span></div>`;
-            });
-        }
+    // If multiStreamData is available (Crypto IDX Mode)
+    if (data && data.btc && data.eth && data.ltc && data.zec) {
+        const coins = [
+            { name: 'BTC', data: data.btc, dec: 2 },
+            { name: 'ETH', data: data.eth, dec: 2 },
+            { name: 'LTC', data: data.ltc, dec: 2 },
+            { name: 'ZEC', data: data.zec, dec: 2 }
+        ];
 
-        if (data && data.asks) {
+        coins.forEach(c => {
+            const topBid = c.data.bids && c.data.bids[0] ? parseFloat(c.data.bids[0][0]).toFixed(c.dec) : '0.00';
+            const topAsk = c.data.asks && c.data.asks[0] ? parseFloat(c.data.asks[0][0]).toFixed(c.dec) : '0.00';
+
+            bidsHtml += `<div class="book-row"><span class="bid-p">${c.name} BID</span><span>$${topBid}</span></div>`;
+            asksHtml += `<div class="book-row"><span class="ask-p">${c.name} ASK</span><span>$${topAsk}</span></div>`;
+        });
+    } 
+    // Single Asset Mode Fallback
+    else if (data && data.bids) {
+        data.bids.slice(0, 5).forEach(b => {
+            bidsHtml += `<div class="book-row"><span class="bid-p">${parseFloat(b[0]).toFixed(decimals)}</span><span>${parseFloat(b[1]).toFixed(2)}</span></div>`;
+        });
+
+        if (data.asks) {
             data.asks.slice(0, 5).forEach(a => {
                 asksHtml += `<div class="book-row"><span class="ask-p">${parseFloat(a[0]).toFixed(decimals)}</span><span>${parseFloat(a[1]).toFixed(2)}</span></div>`;
             });
         }
-
-        document.getElementById('bids-stream').innerHTML = bidsHtml;
-        document.getElementById('asks-stream').innerHTML = asksHtml;
     }
+
+    document.getElementById('bids-stream').innerHTML = bidsHtml;
+    document.getElementById('asks-stream').innerHTML = asksHtml;
+}
+
 
     // Exact 01-Second Execution Clock Loop
     setInterval(() => {
