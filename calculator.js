@@ -1,70 +1,68 @@
-// Dual-Filter Combination Signal Engine (Imbalance + Aggression)
-class SignalCalculator {
-    static compute(depthData) {
-        if (!depthData || !depthData.bids || !depthData.asks) {
-            return { imbalance: 0, aggressionRatio: 0, buyerAggressive: false, sellerAggressive: false, confidence: 0, signalText: "WAITING DATA", cardClass: "", sigClass: "WAITING", totalBids: 0, totalAsks: 0 };
+class CryptoIDXCalculator {
+    static compute(multiStreamData) {
+        if (!multiStreamData) {
+            return { signalText: "WAITING DATA", confidence: 0, sigClass: "WAITING", cardClass: "" };
         }
 
-        // 1. Orderbook Depth Imbalance
-        const binanceBidsVol = depthData.bids.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
-        const binanceAsksVol = depthData.asks.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
+        const weights = { btc: 0.40, eth: 0.30, ltc: 0.15, zec: 0.15 };
 
-        const totalBids = binanceBidsVol + depthData.yahooBidsWeight;
-        const totalAsks = binanceAsksVol + depthData.yahooAsksWeight;
-        const totalVolume = totalBids + totalAsks;
+        let combinedImbalance = 0;
+        let combinedAggression = 0;
+        let activeCount = 0;
 
-        const imbalance = totalVolume > 0 ? (totalBids - totalAsks) / totalVolume : 0;
+        for (let coin in weights) {
+            const data = multiStreamData[coin];
+            if (data && data.bids.length > 0 && data.asks.length > 0) {
+                // Depth Imbalance Calculation
+                const bidsVol = data.bids.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
+                const asksVol = data.asks.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
+                const totalDepth = bidsVol + asksVol;
+                const coinImbalance = totalDepth > 0 ? (bidsVol - asksVol) / totalDepth : 0;
 
-        // 2. Buyer vs Seller Aggression Calculation
-        const totalMarketVol = depthData.buyMarketVol + depthData.sellMarketVol;
-        let aggressionRatio = 0;
-        if (totalMarketVol > 0) {
-            aggressionRatio = (depthData.buyMarketVol - depthData.sellMarketVol) / totalMarketVol;
+                // Aggression Volume Calculation
+                const totalTrade = data.buyVol + data.sellVol;
+                const coinAggression = totalTrade > 0 ? (data.buyVol - data.sellVol) / totalTrade : 0;
+
+                // Weighted Accumulation
+                combinedImbalance += coinImbalance * weights[coin];
+                combinedAggression += coinAggression * weights[coin];
+                activeCount++;
+            }
         }
 
-        const buyerAggressive = aggressionRatio > 0.08;
-        const sellerAggressive = aggressionRatio < -0.08;
+        if (activeCount < 2) {
+            return { signalText: "CONNECTING WEBSOCKETS...", confidence: 0, sigClass: "WAITING", cardClass: "" };
+        }
 
-        // 3. COMBINATION SIGNAL GENERATION
-        let signalText = "LEAN NEUTRAL";
-        let cardClass = "";
+        // Final Composite Score (40% Orderbook Depth + 60% Live Aggression Trades)
+        const compositeScore = (combinedImbalance * 0.4) + (combinedAggression * 0.6);
+
+        let signalText = "WAITING DATA / NEUTRAL";
         let sigClass = "WAITING";
+        let cardClass = "";
         let confidence = 50;
 
-        // Both Imbalance AND Trade Aggression must agree
-        if (imbalance > 0.03 && buyerAggressive) {
+        // Next Candle Prediction Rule
+        if (compositeScore > 0.02) {
             signalText = "NEXT CANDLE: GREEN (BUY)";
             sigClass = "BUY";
             cardClass = "GREEN";
-            confidence = Math.min(Math.round(65 + (Math.abs(imbalance + aggressionRatio) * 30)), 99);
-        } else if (imbalance < -0.03 && sellerAggressive) {
+            confidence = Math.min(Math.round(70 + (Math.abs(compositeScore) * 60)), 99);
+        } else if (compositeScore < -0.02) {
             signalText = "NEXT CANDLE: RED (SELL)";
             sigClass = "SELL";
             cardClass = "RED";
-            confidence = Math.min(Math.round(65 + (Math.abs(imbalance + aggressionRatio) * 30)), 99);
-        } else if (imbalance > 0.04) {
-            signalText = "LEAN BUY (WEAK AGGRESSION)";
-            sigClass = "BUY";
-            confidence = 58;
-        } else if (imbalance < -0.04) {
-            signalText = "LEAN SELL (WEAK AGGRESSION)";
-            sigClass = "SELL";
-            confidence = 58;
+            confidence = Math.min(Math.round(70 + (Math.abs(compositeScore) * 60)), 99);
         }
 
         return {
-            imbalance,
-            aggressionRatio,
-            buyerAggressive,
-            sellerAggressive,
-            buyVol: depthData.buyMarketVol,
-            sellVol: depthData.sellMarketVol,
-            confidence,
+            combinedImbalance: (combinedImbalance * 100).toFixed(2) + "%",
+            combinedAggression: (combinedAggression * 100).toFixed(2) + "%",
+            compositeScore: compositeScore.toFixed(4),
             signalText,
-            cardClass,
+            confidence,
             sigClass,
-            totalBids,
-            totalAsks
+            cardClass
         };
     }
 }
