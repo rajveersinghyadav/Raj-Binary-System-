@@ -197,39 +197,41 @@
     let bidsHtml = '';
     let asksHtml = '';
 
-    // If multiStreamData is available (Crypto IDX Mode)
+    // If Crypto IDX multi-stream data is active
     if (data && data.btc && data.eth && data.ltc && data.zec) {
-        const coins = [
-            { name: 'BTC', data: data.btc, dec: 2 },
-            { name: 'ETH', data: data.eth, dec: 2 },
-            { name: 'LTC', data: data.ltc, dec: 2 },
-            { name: 'ZEC', data: data.zec, dec: 2 }
+        const coinsList = [
+            { key: 'btc', label: 'BTC', dec: 2 },
+            { key: 'eth', label: 'ETH', dec: 2 },
+            { key: 'ltc', label: 'LTC', dec: 2 },
+            { key: 'zec', label: 'ZEC', dec: 2 }
         ];
 
-        coins.forEach(c => {
-            const topBid = c.data.bids && c.data.bids[0] ? parseFloat(c.data.bids[0][0]).toFixed(c.dec) : '0.00';
-            const topAsk = c.data.asks && c.data.asks[0] ? parseFloat(c.data.asks[0][0]).toFixed(c.dec) : '0.00';
+        coinsList.forEach(item => {
+            const coinData = data[item.key];
+            const topBid = (coinData && coinData.bids && coinData.bids[0]) ? parseFloat(coinData.bids[0][0]).toFixed(item.dec) : '0.00';
+            const topAsk = (coinData && coinData.asks && coinData.asks[0]) ? parseFloat(coinData.asks[0][0]).toFixed(item.dec) : '0.00';
 
-            bidsHtml += `<div class="book-row"><span class="bid-p">${c.name} BID</span><span>$${topBid}</span></div>`;
-            asksHtml += `<div class="book-row"><span class="ask-p">${c.name} ASK</span><span>$${topAsk}</span></div>`;
+            const bidQty = (coinData && coinData.bids && coinData.bids[0]) ? parseFloat(coinData.bids[0][1]).toFixed(2) : '0.00';
+            const askQty = (coinData && coinData.asks && coinData.asks[0]) ? parseFloat(coinData.asks[0][1]).toFixed(2) : '0.00';
+
+            bidsHtml += `<div class="book-row"><span class="bid-p">${item.label} $${topBid}</span><span>${bidQty}</span></div>`;
+            asksHtml += `<div class="book-row"><span class="ask-p">${item.label} $${topAsk}</span><span>${askQty}</span></div>`;
         });
     } 
     // Single Asset Mode Fallback
-    else if (data && data.bids) {
+    else if (data && data.bids && data.asks) {
         data.bids.slice(0, 5).forEach(b => {
             bidsHtml += `<div class="book-row"><span class="bid-p">${parseFloat(b[0]).toFixed(decimals)}</span><span>${parseFloat(b[1]).toFixed(2)}</span></div>`;
         });
-
-        if (data.asks) {
-            data.asks.slice(0, 5).forEach(a => {
-                asksHtml += `<div class="book-row"><span class="ask-p">${parseFloat(a[0]).toFixed(decimals)}</span><span>${parseFloat(a[1]).toFixed(2)}</span></div>`;
-            });
-        }
+        data.asks.slice(0, 5).forEach(a => {
+            asksHtml += `<div class="book-row"><span class="ask-p">${parseFloat(a[0]).toFixed(decimals)}</span><span>${parseFloat(a[1]).toFixed(2)}</span></div>`;
+        });
     }
 
     document.getElementById('bids-stream').innerHTML = bidsHtml;
     document.getElementById('asks-stream').innerHTML = asksHtml;
 }
+
 
 
     // Exact 01-Second Execution Clock Loop
