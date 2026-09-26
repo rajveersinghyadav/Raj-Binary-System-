@@ -1,1 +1,8 @@
+fastapi
+uvicorn
+websockets
+requests
+pandas
+ta
+jinja2
 
