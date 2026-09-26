@@ -26,29 +26,29 @@ class CryptoIDXStreamer {
                 const raw = JSON.parse(event.data);
                 if (!raw || !raw.stream || !raw.data) return;
 
-                const streamName = raw.stream;
-                const data = raw.data;
+                const s = raw.stream;
+                const d = raw.data;
 
                 let coin = "";
-                if (streamName.startsWith("btcusdt")) coin = "btc";
-                else if (streamName.startsWith("ethusdt")) coin = "eth";
-                else if (streamName.startsWith("ltcusdt")) coin = "ltc";
-                else if (streamName.startsWith("zecusdt")) coin = "zec";
+                if (s.startsWith("btcusdt")) coin = "btc";
+                else if (s.startsWith("ethusdt")) coin = "eth";
+                else if (s.startsWith("ltcusdt")) coin = "ltc";
+                else if (s.startsWith("zecusdt")) coin = "zec";
 
                 if (!coin) return;
 
-                // Depth Updates
-                if (streamName.includes("@depth")) {
-                    if (data.bids) this.streamsData[coin].bids = data.bids;
-                    if (data.asks) this.streamsData[coin].asks = data.asks;
-                } 
-                // Trade Volume Updates
-                else if (streamName.includes("@trade")) {
-                    const qty = parseFloat(data.q || 0);
-                    if (data.m) {
-                        this.streamsData[coin].sellVol += qty;
+                if (s.includes("@depth")) {
+                    this.streamsData[coin].bids = d.bids || [];
+                    this.streamsData[coin].asks = d.asks || [];
+                } else if (s.includes("@trade")) {
+                    const qty = parseFloat(d.q || 0);
+                    const price = parseFloat(d.p || 1);
+                    const val = qty * price;
+
+                    if (d.m) {
+                        this.streamsData[coin].sellVol += val;
                     } else {
-                        this.streamsData[coin].buyVol += qty;
+                        this.streamsData[coin].buyVol += val;
                     }
                 }
 
@@ -56,12 +56,12 @@ class CryptoIDXStreamer {
                     this.onUpdate(this.streamsData);
                 }
             } catch (err) {
-                console.error("Stream parsing error:", err);
+                console.error("Stream parse error:", err);
             }
         };
 
-        this.ws.onerror = () => setTimeout(() => this.connect(), 3000);
-        this.ws.onclose = () => setTimeout(() => this.connect(), 3000);
+        this.ws.onerror = () => setTimeout(() => this.connect(), 2000);
+        this.ws.onclose = () => setTimeout(() => this.connect(), 2000);
     }
 
     resetTradeVolumes() {
@@ -72,7 +72,6 @@ class CryptoIDXStreamer {
     }
 }
 
-// Single Asset Streamer (BTC, ETH, SOL, Forex)
 class DataStreamer {
     constructor(config, onPrice, onDepth) {
         this.config = config;
@@ -102,7 +101,7 @@ class DataStreamer {
                 this.depthData.asks = data.asks;
                 if (data.bids[0]) this.onPrice(parseFloat(data.bids[0][0]));
             } else if (data.e === 'trade') {
-                const qty = parseFloat(data.q);
+                const qty = parseFloat(data.q) * parseFloat(data.p || 1);
                 if (data.m) this.sellVol += qty;
                 else this.buyVol += qty;
             }
