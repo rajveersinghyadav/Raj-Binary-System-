@@ -4,7 +4,7 @@ class CryptoIDXCalculator {
             return this.getEmptyState("WAITING STREAM DATA");
         }
 
-        // Binomo Crypto IDX Exact Weights
+        // Binomo Crypto IDX Weightage
         const weights = {
             btc: 0.40,
             eth: 0.30,
@@ -24,10 +24,10 @@ class CryptoIDXCalculator {
             if (data && data.bids && data.asks && data.bids.length > 0) {
                 activeCoinsCount++;
 
-                // Orderbook Dollar Volume (Price * Quantity)
                 let coinBidsValue = 0;
                 let coinAsksValue = 0;
 
+                // Top 5 Depth Dollar Volume
                 for (let i = 0; i < Math.min(5, data.bids.length); i++) {
                     coinBidsValue += parseFloat(data.bids[i][0]) * parseFloat(data.bids[i][1]);
                 }
@@ -39,43 +39,48 @@ class CryptoIDXCalculator {
                 totalWeightedBidsVal += coinBidsValue * weights[coin];
                 totalWeightedAsksVal += coinAsksValue * weights[coin];
 
-                // Aggression Trade Volume
                 totalWeightedBuyVol += (data.buyVol || 0) * weights[coin];
                 totalWeightedSellVol += (data.sellVol || 0) * weights[coin];
             }
         }
 
-        if (activeCoinsCount === 0) {
+        if (activeCoinsCount < 2) {
             return this.getEmptyState("SYNCING 4 STREAMS...");
         }
 
-        // Combined Depth Imbalance (-1.0 to +1.0)
+        // 1. DEPTH IMBALANCE RATIO (-1.0 to +1.0)
         const totalDepthVal = totalWeightedBidsVal + totalWeightedAsksVal;
         const imbalance = totalDepthVal > 0 ? (totalWeightedBidsVal - totalWeightedAsksVal) / totalDepthVal : 0;
 
-        // Combined Trade Aggression (-1.0 to +1.0)
+        // 2. TRADE AGGRESSION RATIO (-1.0 to +1.0)
         const totalTradeVol = totalWeightedBuyVol + totalWeightedSellVol;
         const aggressionRatio = totalTradeVol > 0 ? (totalWeightedBuyVol - totalWeightedSellVol) / totalTradeVol : 0;
 
-        // Final Composite Score (40% Orderbook Depth + 60% Trades Aggression)
-        const compositeScore = (imbalance * 0.40) + (aggressionRatio * 0.60);
+        // 3. COMPOSITE SCORE (50% Orderbook + 50% Active Trades)
+        const compositeScore = (imbalance * 0.50) + (aggressionRatio * 0.50);
 
-        let signalText = "WAITING / NEUTRAL";
+        let signalText = "NEUTRAL / NO HIGH-CONFIDENCE ENTRY";
         let sigClass = "WAITING";
         let cardClass = "";
         let confidence = 50;
 
-        // Strict Signal Threshold to Prevent Losses
-        if (compositeScore > 0.08 && imbalance > 0.02) {
-            signalText = "NEXT CANDLE: CALL (GREEN)";
+        // --- ULTRA-STRICT 75:25 THRESHOLD FILTERS ---
+        // BUY RULE: Composite Score >= +0.25 AND Imbalance >= +0.15 AND Aggression >= +0.15
+        const isUltraBuy = (compositeScore >= 0.25) && (imbalance >= 0.15) && (aggressionRatio >= 0.15);
+        
+        // SELL RULE: Composite Score <= -0.25 AND Imbalance <= -0.15 AND Aggression <= -0.15
+        const isUltraSell = (compositeScore <= -0.25) && (imbalance <= -0.15) && (aggressionRatio <= -0.15);
+
+        if (isUltraBuy) {
+            signalText = "NEXT CANDLE: ULTRA CALL (STRONG BUY)";
             sigClass = "BUY";
             cardClass = "GREEN";
-            confidence = Math.min(98, Math.round(75 + (compositeScore * 100)));
-        } else if (compositeScore < -0.08 && imbalance < -0.02) {
-            signalText = "NEXT CANDLE: PUT (RED)";
+            confidence = Math.min(99, Math.round(85 + (compositeScore * 50)));
+        } else if (isUltraSell) {
+            signalText = "NEXT CANDLE: ULTRA PUT (STRONG SELL)";
             sigClass = "SELL";
             cardClass = "RED";
-            confidence = Math.min(98, Math.round(75 + (Math.abs(compositeScore) * 100)));
+            confidence = Math.min(99, Math.round(85 + (Math.abs(compositeScore) * 50)));
         }
 
         return {
@@ -86,8 +91,8 @@ class CryptoIDXCalculator {
             totalAsks: totalWeightedAsksVal,
             buyVol: totalWeightedBuyVol,
             sellVol: totalWeightedSellVol,
-            buyerAggressive: aggressionRatio > 0.1,
-            sellerAggressive: aggressionRatio < -0.1,
+            buyerAggressive: aggressionRatio > 0.15,
+            sellerAggressive: aggressionRatio < -0.15,
             signalText: signalText,
             confidence: confidence,
             sigClass: sigClass,
