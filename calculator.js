@@ -1,20 +1,25 @@
-// Order Book Imbalance & Signal Calculation Engine
+// Dual-Exchange Orderbook Calculation Engine
 class SignalCalculator {
     static compute(depthData) {
         if (!depthData || !depthData.bids || !depthData.asks) {
             return { imbalance: 0, confidence: 0, signalText: "WAITING DATA", cardClass: "", sigClass: "WAITING", totalBids: 0, totalAsks: 0 };
         }
 
-        // Real Volume Calculation from Live Stream
-        const totalBids = depthData.bids.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0) + (depthData.buyTicks * 300);
-        const totalAsks = depthData.asks.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0) + (depthData.sellTicks * 300);
+        // 1. Binance Buyer & Seller Volume Calculation
+        const binanceBidsVol = depthData.bids.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
+        const binanceAsksVol = depthData.asks.reduce((sum, item) => sum + (parseFloat(item[0]) * parseFloat(item[1])), 0);
+
+        // 2. Merged Total Buyer & Seller Volume (Binance + Yahoo Interbank Weights)
+        const totalBids = binanceBidsVol + depthData.yahooBidsWeight + (depthData.buyTicks * 300);
+        const totalAsks = binanceAsksVol + depthData.yahooAsksWeight + (depthData.sellTicks * 300);
+        
         const totalVolume = totalBids + totalAsks;
 
         if (totalVolume === 0) {
             return { imbalance: 0, confidence: 50, signalText: "LEAN NEUTRAL", cardClass: "", sigClass: "WAITING", totalBids: 0, totalAsks: 0 };
         }
 
-        // Imbalance Ratio (-1.000 to +1.000)
+        // Imbalance Formula
         const imbalance = (totalBids - totalAsks) / totalVolume;
         const confidence = Math.min(Math.round(52 + (Math.abs(imbalance) * 48)), 99);
 
