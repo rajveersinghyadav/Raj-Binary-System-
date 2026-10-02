@@ -75,14 +75,14 @@
     </select>
 
     <div class="badges">
-        <span id="stream-status" class="badge on">MULTI-EXCHANGE STREAM LIVE</span>
+        <span id="stream-status" class="badge on">REAL EXECUTED TRADES STREAM LIVE</span>
     </div>
 
     <div id="price" class="price">CONNECTING...</div>
 
     <div class="timer-box">
         <div>Clock: <span id="timer" class="timer-val">00:59</span></div>
-        <div id="phase-text" class="phase-text" style="color:#f0b90b;">Continuous Imbalance & Aggression Calculation...</div>
+        <div id="phase-text" class="phase-text" style="color:#f0b90b;">Accumulating Executed Trades & Volume...</div>
     </div>
 
     <!-- MAIN SIGNAL CARD -->
@@ -92,45 +92,45 @@
         <div>Confidence: <b id="confidence" style="color:#fff;">0%</b></div>
     </div>
 
-    <!-- WINDOW 1: BUYER VS SELLER AGGRESSION TRACKER -->
+    <!-- WINDOW 1: EXECUTED TRADE VOLUME AGGRESSION -->
     <div class="aggression-box">
-        <div class="box-header">⚡ BUYER VS SELLER AGGRESSION TRACKER</div>
+        <div class="box-header">⚡ EXECUTED TRADE VOLUME DELTA</div>
         <div id="agg-status" class="agg-status" style="color:#848e9c;">NEUTRAL AGGRESSION</div>
         <div class="bar-container">
             <div id="agg-buy-bar" class="buy-bar" style="width: 50%;"></div>
             <div id="agg-sell-bar" class="sell-bar" style="width: 50%;"></div>
         </div>
         <div class="stats">
-            <span>Buy Agg Vol: <b id="buy-agg-val" style="color:#0ecb81">0</b></span>
+            <span>Buy Vol ($): <b id="buy-agg-val" style="color:#0ecb81">0</b></span>
             <span>Ratio: <b id="agg-ratio-val" style="color:#fff">0.000</b></span>
-            <span>Sell Agg Vol: <b id="sell-agg-val" style="color:#f6465d">0</b></span>
+            <span>Sell Vol ($): <b id="sell-agg-val" style="color:#f6465d">0</b></span>
         </div>
     </div>
 
-    <!-- WINDOW 2: LOT DEPTH IMBALANCE -->
+    <!-- WINDOW 2: REAL TRADERS COUNT DOMINANCE -->
     <div class="aggression-box">
-        <div class="box-header">📊 LOT ORDERBOOK DEPTH IMBALANCE</div>
+        <div class="box-header">👥 REAL TRADERS COUNT DOMINANCE</div>
         <div class="bar-container">
             <div id="buy-bar" class="buy-bar" style="width: 50%;"></div>
             <div id="sell-bar" class="sell-bar" style="width: 50%;"></div>
         </div>
         <div class="stats">
-            <span>Bids Lot Vol: <b id="total-bids" style="color:#0ecb81">0</b></span>
-            <span>Imbalance: <b id="imbalance-val" style="color:#fff">0.000</b></span>
-            <span>Asks Lot Vol: <b id="total-asks" style="color:#f6465d">0</b></span>
+            <span>Buy Trades: <b id="total-bids" style="color:#0ecb81">0</b></span>
+            <span>Ratio: <b id="imbalance-val" style="color:#fff">0.000</b></span>
+            <span>Sell Trades: <b id="total-asks" style="color:#f6465d">0</b></span>
         </div>
     </div>
 
     <!-- LIVE STREAM TABLE -->
     <div class="book-container">
-        <div class="book-title"><span class="pulse-dot"></span> 4-ASSET COMPOSITE LIVE ORDERBOOK</div>
+        <div class="book-title"><span class="pulse-dot"></span> LIVE TRADES COUNT MONITOR</div>
         <div class="book-grid">
             <div>
-                <div class="book-col-header"><span>BID PRICE</span><span>QTY</span></div>
+                <div class="book-col-header"><span>BUY TRADES</span><span>VOL</span></div>
                 <div id="bids-stream"></div>
             </div>
             <div>
-                <div class="book-col-header"><span>ASK PRICE</span><span>QTY</span></div>
+                <div class="book-col-header"><span>SELL TRADES</span><span>VOL</span></div>
                 <div id="asks-stream"></div>
             </div>
         </div>
@@ -169,7 +169,6 @@
     let lockedSignal = null;
     let streamer = null;
 
-    // Handle Crypto IDX Multi-Stream vs Single Asset Stream
     if (config.isIdx && typeof CryptoIDXStreamer !== 'undefined') {
         document.getElementById('price').innerText = "4-ASSET INDEX";
         streamer = new CryptoIDXStreamer((multiData) => {
@@ -195,39 +194,34 @@
         let bidsHtml = '';
         let asksHtml = '';
 
-        // Check if 4-Asset Composite Stream is Active
         if (data && data.btc && data.eth && data.ltc && data.zec) {
             const coins = [
-                { key: 'btc', label: 'BTC', dec: 2 },
-                { key: 'eth', label: 'ETH', dec: 2 },
-                { key: 'ltc', label: 'LTC', dec: 2 },
-                { key: 'zec', label: 'ZEC', dec: 2 }
+                { key: 'btc', label: 'BTC' },
+                { key: 'eth', label: 'ETH' },
+                { key: 'ltc', label: 'LTC' },
+                { key: 'zec', label: 'ZEC' }
             ];
 
             coins.forEach(item => {
                 const c = data[item.key];
-                const bidP = (c && c.bids && c.bids[0]) ? parseFloat(c.bids[0][0]).toFixed(item.dec) : '0.00';
-                const askP = (c && c.asks && c.asks[0]) ? parseFloat(c.asks[0][0]).toFixed(item.dec) : '0.00';
-                const bidQ = (c && c.bids && c.bids[0]) ? parseFloat(c.bids[0][1]).toFixed(2) : '0.00';
-                const askQ = (c && c.asks && c.asks[0]) ? parseFloat(c.asks[0][1]).toFixed(2) : '0.00';
+                const buyC = c ? (c.buyCount || 0) : 0;
+                const sellC = c ? (c.sellCount || 0) : 0;
+                const buyV = c ? Math.round(c.buyVol || 0) : 0;
+                const sellV = c ? Math.round(c.sellVol || 0) : 0;
 
-                bidsHtml += `<div class="book-row"><span class="bid-p">${item.label} $${bidP}</span><span>${bidQ}</span></div>`;
-                asksHtml += `<div class="book-row"><span class="ask-p">${item.label} $${askP}</span><span>${askQ}</span></div>`;
+                bidsHtml += `<div class="book-row"><span class="bid-p">${item.label}: ${buyC}</span><span>$${buyV}</span></div>`;
+                asksHtml += `<div class="book-row"><span class="ask-p">${item.label}: ${sellC}</span><span>$${sellV}</span></div>`;
             });
-        } else if (data && data.bids && data.asks) {
-            data.bids.slice(0, 5).forEach(b => {
-                bidsHtml += `<div class="book-row"><span class="bid-p">${parseFloat(b[0]).toFixed(decimals)}</span><span>${parseFloat(b[1]).toFixed(2)}</span></div>`;
-            });
-            data.asks.slice(0, 5).forEach(a => {
-                asksHtml += `<div class="book-row"><span class="ask-p">${parseFloat(a[0]).toFixed(decimals)}</span><span>${parseFloat(a[1]).toFixed(2)}</span></div>`;
-            });
+        } else if (data) {
+            bidsHtml = `<div class="book-row"><span class="bid-p">BUY TRADES: ${data.buyCount || 0}</span><span>$${Math.round(data.buyVol || 0)}</span></div>`;
+            asksHtml = `<div class="book-row"><span class="ask-p">SELL TRADES: ${data.sellCount || 0}</span><span>$${Math.round(data.sellVol || 0)}</span></div>`;
         }
 
         document.getElementById('bids-stream').innerHTML = bidsHtml;
         document.getElementById('asks-stream').innerHTML = asksHtml;
     }
 
-    // Exact 01-Second Execution Clock Loop
+    // 01-Second Execution Clock Loop
     setInterval(() => {
         const seconds = new Date().getSeconds();
         const remainingSeconds = 59 - seconds;
@@ -236,7 +230,6 @@
 
         if (!latestDepthData) return;
 
-        // Calculate Signal based on Asset Type
         let calc;
         if (config.isIdx && typeof CryptoIDXCalculator !== 'undefined') {
             calc = CryptoIDXCalculator.compute(latestDepthData);
@@ -246,8 +239,7 @@
             return;
         }
 
-        // 01-SECOND SIGNAL LOCK & EXECUTION ENGINE
-        if (remainingSeconds === 59 || seconds === 1) { // EXACT CANDLE OPEN (01s)
+        if (remainingSeconds === 59 || seconds === 1) { 
             if (!lockedSignal) {
                 lockedSignal = calc;
             }
@@ -255,8 +247,8 @@
             document.getElementById('phase-text').innerText = '🔥 NEW CANDLE STARTED! FINAL SIGNAL EXECUTION ACTIVE';
             document.getElementById('phase-text').style.color = '#0ecb81';
         } else {
-            lockedSignal = null; // Continuous Calculation Phase (02s to 58s)
-            document.getElementById('phase-text').innerText = 'Accumulating Imbalance + Trade Aggression Streams...';
+            lockedSignal = null; 
+            document.getElementById('phase-text').innerText = 'Accumulating Live Executed Trades + Volume...';
             document.getElementById('phase-text').style.color = '#f0b90b';
             renderSignalUI(calc, "CALCULATING STREAM...");
         }
@@ -279,7 +271,6 @@
 
         document.getElementById('confidence').innerText = (calc.confidence || 0) + '%';
 
-        // Aggression Window UI Updates
         const aggElem = document.getElementById('agg-status');
         const aggRatio = calc.aggressionRatio !== undefined ? calc.aggressionRatio : (parseFloat(calc.combinedAggression) || 0);
 
@@ -303,19 +294,15 @@
         document.getElementById('agg-buy-bar').style.width = aggPct + '%';
         document.getElementById('agg-sell-bar').style.width = (100 - aggPct) + '%';
 
-        // Lot Imbalance UI Updates
+        // Traders Count Dominance Updates
         const imbVal = calc.imbalance !== undefined ? calc.imbalance : (parseFloat(calc.combinedImbalance) || 0);
         document.getElementById('imbalance-val').innerText = typeof imbVal === 'number' ? imbVal.toFixed(3) : imbVal;
 
-        let totalBids = calc.totalBids || 0;
-        let totalAsks = calc.totalAsks || 0;
+        let buyTrades = Math.round(calc.totalBids || 0);
+        let sellTrades = Math.round(calc.totalAsks || 0);
 
-        // FIXED: Corrected totalBids and totalAsks formatting
-        let bidsFormatted = totalBids >= 1000000 ? (totalBids / 1000000).toFixed(1) + 'M' : Math.round(totalBids / 1000) + 'k';
-        let asksFormatted = totalAsks >= 1000000 ? (totalAsks / 1000000).toFixed(1) + 'M' : Math.round(totalAsks / 1000) + 'k';
-
-        document.getElementById('total-bids').innerText = bidsFormatted;
-        document.getElementById('total-asks').innerText = asksFormatted;
+        document.getElementById('total-bids').innerText = buyTrades;
+        document.getElementById('total-asks').innerText = sellTrades;
 
         const buyPct = Math.max(10, Math.min(90, ((imbVal + 1) / 2) * 100));
         document.getElementById('buy-bar').style.width = buyPct + '%';
