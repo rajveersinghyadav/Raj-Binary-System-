@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NexBar Aggression Combo Precision System</title>
+    <title>NexBar Binomo Binary Precision System</title>
     <style>
         * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         body { background-color: #0b0e11; color: #eaecef; margin: 0; padding: 15px; display: flex; justify-content: center; }
@@ -30,7 +30,6 @@
         .SELL { color: #f6465d; }
         .WAITING { color: #848e9c; }
 
-        /* AGGRESSION WINDOW STYLES */
         .aggression-box { background: #121418; border: 1px solid #2b313a; border-radius: 10px; padding: 10px; margin-bottom: 10px; }
         .box-header { font-size: 10px; font-weight: bold; color: #f0b90b; text-transform: uppercase; margin-bottom: 6px; text-align: center; }
         .agg-status { text-align: center; font-size: 13px; font-weight: bold; margin-bottom: 6px; }
@@ -87,12 +86,12 @@
 
     <!-- MAIN SIGNAL CARD -->
     <div id="signal-card" class="signal-card">
-        <div style="font-size: 10px; font-weight: bold; color:#848e9c; text-transform:uppercase;">COMBO SIGNAL (01s EXECUTION)</div>
-        <div id="signal" class="signal-type WAITING">CALCULATING STREAM...</div>
+        <div style="font-size: 10px; font-weight: bold; color:#848e9c; text-transform:uppercase;">SIGNAL WINDOW (30s - 01s)</div>
+        <div id="signal" class="signal-type WAITING">CALCULATING (59s to 30s)...</div>
         <div>Confidence: <b id="confidence" style="color:#fff;">0%</b></div>
     </div>
 
-    <!-- WINDOW 1: EXECUTED TRADE VOLUME AGGRESSION -->
+    <!-- WINDOW 1: EXECUTED TRADE VOLUME DELTA -->
     <div class="aggression-box">
         <div class="box-header">⚡ EXECUTED TRADE VOLUME DELTA</div>
         <div id="agg-status" class="agg-status" style="color:#848e9c;">NEUTRAL AGGRESSION</div>
@@ -153,14 +152,14 @@
 
     const assetRegistry = {
         'CRYPTO_IDX': { isIdx: true, isForex: false },
-        'BTCUSDT': { streamSymbol: 'btcusdt', yahooSymbol: 'BTC-USD', decimals: 2, isForex: false },
-        'ETHUSDT': { streamSymbol: 'ethusdt', yahooSymbol: 'ETH-USD', decimals: 2, isForex: false },
-        'SOLUSDT': { streamSymbol: 'solusdt', yahooSymbol: 'SOL-USD', decimals: 2, isForex: false },
-        'EURUSD': { streamSymbol: 'eurusdt', yahooSymbol: 'EURUSD=X', decimals: 5, isForex: true },
-        'AUDCAD': { streamSymbol: 'audusdt', yahooSymbol: 'AUDCAD=X', decimals: 5, isForex: true },
-        'AUDCHF': { streamSymbol: 'audusdt', yahooSymbol: 'AUDCHF=X', decimals: 5, isForex: true },
-        'AUDJPY': { streamSymbol: 'audusdt', yahooSymbol: 'AUDJPY=X', decimals: 3, isForex: true },
-        'AUDUSD': { streamSymbol: 'audusdt', yahooSymbol: 'AUDUSD=X', decimals: 5, isForex: true }
+        'BTCUSDT': { streamSymbol: 'btcusdt', decimals: 2, isForex: false },
+        'ETHUSDT': { streamSymbol: 'ethusdt', decimals: 2, isForex: false },
+        'SOLUSDT': { streamSymbol: 'solusdt', decimals: 2, isForex: false },
+        'EURUSD': { streamSymbol: 'eurusdt', decimals: 5, isForex: true },
+        'AUDCAD': { streamSymbol: 'audusdt', decimals: 5, isForex: true },
+        'AUDCHF': { streamSymbol: 'audusdt', decimals: 5, isForex: true },
+        'AUDJPY': { streamSymbol: 'audusdt', decimals: 3, isForex: true },
+        'AUDUSD': { streamSymbol: 'audusdt', decimals: 5, isForex: true }
     };
 
     const config = assetRegistry[currentAsset] || assetRegistry['CRYPTO_IDX'];
@@ -173,7 +172,7 @@
         document.getElementById('price').innerText = "4-ASSET INDEX";
         streamer = new CryptoIDXStreamer((multiData) => {
             latestDepthData = multiData;
-            renderOrderBookUI(multiData, 2);
+            renderOrderBookUI(multiData);
         });
         streamer.connect();
     } else {
@@ -184,13 +183,13 @@
             },
             (depthData) => {
                 latestDepthData = depthData;
-                renderOrderBookUI(depthData, config.decimals || 2);
+                renderOrderBookUI(depthData);
             }
         );
         streamer.start();
     }
 
-    function renderOrderBookUI(data, decimals) {
+    function renderOrderBookUI(data) {
         let bidsHtml = '';
         let asksHtml = '';
 
@@ -221,7 +220,7 @@
         document.getElementById('asks-stream').innerHTML = asksHtml;
     }
 
-    // 01-Second Execution Clock Loop
+    // MAIN TIMING CYCLE: 59s to 30s (Calculation) | 30s to 01s (Bidding & Lock)
     setInterval(() => {
         const seconds = new Date().getSeconds();
         const remainingSeconds = 59 - seconds;
@@ -230,30 +229,37 @@
 
         if (!latestDepthData) return;
 
-        let calc;
+        // Background Calculation
+        let liveCalc;
         if (config.isIdx && typeof CryptoIDXCalculator !== 'undefined') {
-            calc = CryptoIDXCalculator.compute(latestDepthData);
+            liveCalc = CryptoIDXCalculator.compute(latestDepthData);
         } else if (typeof SignalCalculator !== 'undefined') {
-            calc = SignalCalculator.compute(latestDepthData, config.isForex);
+            liveCalc = SignalCalculator.compute(latestDepthData, config.isForex);
         } else {
             return;
         }
 
-        if (remainingSeconds === 59 || seconds === 1) { 
-            if (!lockedSignal) {
-                lockedSignal = calc;
-            }
-            renderSignalUI(lockedSignal, lockedSignal.signalText);
-            document.getElementById('phase-text').innerText = '🔥 NEW CANDLE STARTED! FINAL SIGNAL EXECUTION ACTIVE';
-            document.getElementById('phase-text').style.color = '#0ecb81';
-        } else {
-            lockedSignal = null; 
-            document.getElementById('phase-text').innerText = 'Accumulating Live Executed Trades + Volume...';
+        // PHASE 1: CALCULATION PHASE (59s to 31s)
+        if (remainingSeconds >= 31) {
+            lockedSignal = null; // Clear lock
+            document.getElementById('phase-text').innerText = '⏳ PHASE 1: ACCUMULATING SPEED (59s -> 30s)';
             document.getElementById('phase-text').style.color = '#f0b90b';
-            renderSignalUI(calc, "CALCULATING STREAM...");
+
+            renderSignalUI(liveCalc, "CALCULATING SPEED & PRESSURE...", true);
+        } 
+        // PHASE 2: SIGNAL LOCK & BIDDING WINDOW (30s to 01s)
+        else {
+            if (!lockedSignal) {
+                lockedSignal = liveCalc; // LOCK SIGNAL EXACTLY AT 30s
+            }
+            document.getElementById('phase-text').innerText = '🔥 PHASE 2: SIGNAL LOCKED (BIDDING WINDOW ACTIVE)';
+            document.getElementById('phase-text').style.color = '#0ecb81';
+
+            renderSignalUI(lockedSignal, lockedSignal.signalText, false);
         }
 
-        if (seconds === 0) {
+        // RESET COUNTERS AT CANDLE START (59s mark)
+        if (remainingSeconds === 59) {
             if (streamer && streamer.resetTradeVolumes) {
                 streamer.resetTradeVolumes();
             } else if (streamer && streamer.resetTicks) {
@@ -262,47 +268,42 @@
         }
     }, 1000);
 
-    function renderSignalUI(calc, overrideText) {
-        document.getElementById('signal-card').className = 'signal-card ' + (calc.cardClass || '');
+    function renderSignalUI(calc, signalDisplayText, isCalculating) {
+        document.getElementById('signal-card').className = 'signal-card ' + (isCalculating ? '' : (calc.cardClass || ''));
 
         const sigElem = document.getElementById('signal');
-        sigElem.innerText = overrideText === "CALCULATING STREAM..." ? overrideText : calc.signalText;
-        sigElem.className = 'signal-type ' + (calc.sigClass || 'WAITING');
+        sigElem.innerText = signalDisplayText;
+        sigElem.className = 'signal-type ' + (isCalculating ? 'WAITING' : (calc.sigClass || 'WAITING'));
 
-        document.getElementById('confidence').innerText = (calc.confidence || 0) + '%';
+        document.getElementById('confidence').innerText = isCalculating ? '0%' : ((calc.confidence || 0) + '%');
 
         const aggElem = document.getElementById('agg-status');
-        const aggRatio = calc.aggressionRatio !== undefined ? calc.aggressionRatio : (parseFloat(calc.combinedAggression) || 0);
+        const aggRatio = calc.aggressionRatio !== undefined ? calc.aggressionRatio : 0;
 
         if (calc.buyerAggressive || aggRatio > 0.15) {
-            aggElem.innerText = "BUYERS HIGHLY AGGRESSIVE 🔥";
+            aggElem.innerText = "BUYERS SPEED HIGH 🔥";
             aggElem.style.color = "#0ecb81";
         } else if (calc.sellerAggressive || aggRatio < -0.15) {
-            aggElem.innerText = "SELLERS HIGHLY AGGRESSIVE ⚡";
+            aggElem.innerText = "SELLERS SPEED HIGH ⚡";
             aggElem.style.color = "#f6465d";
         } else {
-            aggElem.innerText = "NEUTRAL AGGRESSION";
+            aggElem.innerText = "NEUTRAL SPEED";
             aggElem.style.color = "#848e9c";
         }
 
         document.getElementById('buy-agg-val').innerText = Math.round(calc.buyVol || 0);
         document.getElementById('sell-agg-val').innerText = Math.round(calc.sellVol || 0);
-        
         document.getElementById('agg-ratio-val').innerText = typeof aggRatio === 'number' ? aggRatio.toFixed(3) : aggRatio;
 
         const aggPct = Math.max(10, Math.min(90, ((aggRatio + 1) / 2) * 100));
         document.getElementById('agg-buy-bar').style.width = aggPct + '%';
         document.getElementById('agg-sell-bar').style.width = (100 - aggPct) + '%';
 
-        // Traders Count Dominance Updates
-        const imbVal = calc.imbalance !== undefined ? calc.imbalance : (parseFloat(calc.combinedImbalance) || 0);
+        const imbVal = calc.imbalance !== undefined ? calc.imbalance : 0;
         document.getElementById('imbalance-val').innerText = typeof imbVal === 'number' ? imbVal.toFixed(3) : imbVal;
 
-        let buyTrades = Math.round(calc.totalBids || 0);
-        let sellTrades = Math.round(calc.totalAsks || 0);
-
-        document.getElementById('total-bids').innerText = buyTrades;
-        document.getElementById('total-asks').innerText = sellTrades;
+        document.getElementById('total-bids').innerText = Math.round(calc.totalBids || 0);
+        document.getElementById('total-asks').innerText = Math.round(calc.totalAsks || 0);
 
         const buyPct = Math.max(10, Math.min(90, ((imbVal + 1) / 2) * 100));
         document.getElementById('buy-bar').style.width = buyPct + '%';
