@@ -11,7 +11,6 @@ class CryptoIDXStreamer {
     }
 
     connect() {
-        // Pure Real Executed Trades Stream (@aggTrade)
         const streams = [
             "btcusdt@aggTrade",
             "ethusdt@aggTrade",
@@ -38,15 +37,12 @@ class CryptoIDXStreamer {
 
                 if (!coin) return;
 
-                // REAL EXECUTED TRADE DATA PROCESSING
                 const qty = parseFloat(d.q || 0);
                 const price = parseFloat(d.p || 0);
                 const val = qty * price;
 
                 this.streamsData[coin].price = price;
 
-                // d.m = true means Buyer was Passive and Seller hit the Bid (SELLER TRADE)
-                // d.m = false means Seller was Passive and Buyer hit the Ask (BUYER TRADE)
                 if (d.m) {
                     this.streamsData[coin].sellCount += 1;
                     this.streamsData[coin].sellVol += val;
