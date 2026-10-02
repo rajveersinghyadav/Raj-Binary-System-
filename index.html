@@ -63,6 +63,8 @@
             <option value="BTCUSDT">Bitcoin (BTC/USDT)</option>
             <option value="ETHUSDT">Ethereum (ETH/USDT)</option>
             <option value="SOLUSDT">Solana (SOL/USDT)</option>
+            <option value="LTCUSDT">Litecoin (LTC/USDT)</option>
+            <option value="ZECUSDT">Zcash (ZEC/USDT)</option>
         </optgroup>
     </select>
 
@@ -70,11 +72,11 @@
         <span id="stream-status" class="badge on">REAL EXECUTED TRADES STREAM LIVE</span>
     </div>
 
-    <div id="price" class="price">4-ASSET INDEX</div>
+    <div id="price" class="price">CONNECTING...</div>
 
     <div class="timer-box">
         <div>Clock: <span id="timer" class="timer-val">00:59</span></div>
-        <div id="phase-text" class="phase-text" style="color:#f0b90b;">Accumulating Live Trades...</div>
+        <div id="phase-text" class="phase-text" style="color:#f0b90b;">Accumulating Live Real Trades...</div>
     </div>
 
     <!-- MAIN SIGNAL CARD -->
@@ -113,16 +115,16 @@
         </div>
     </div>
 
-    <!-- LIVE STREAM TABLE -->
+    <!-- LIVE STREAM TABLE FOR CURRENT SELECTED ASSET -->
     <div class="book-container">
-        <div class="book-title"><span class="pulse-dot"></span> LIVE TRADES COUNT MONITOR</div>
+        <div id="monitor-title" class="book-title"><span class="pulse-dot"></span> LIVE TRADES COUNT MONITOR</div>
         <div class="book-grid">
             <div>
-                <div class="book-col-header"><span>BUY TRADES</span><span>VOL</span></div>
+                <div class="book-col-header"><span>BUY TRADES</span><span>VOL ($)</span></div>
                 <div id="bids-stream"></div>
             </div>
             <div>
-                <div class="book-col-header"><span>SELL TRADES</span><span>VOL</span></div>
+                <div class="book-col-header"><span>SELL TRADES</span><span>VOL ($)</span></div>
                 <div id="asks-stream"></div>
             </div>
         </div>
@@ -135,7 +137,12 @@
 <script>
     const urlParams = new URLSearchParams(window.location.search);
     let currentAsset = urlParams.get('asset') || 'CRYPTO_IDX';
-    document.getElementById('asset-selector').value = currentAsset;
+    
+    // Ensure asset selector matches current asset
+    const assetSelector = document.getElementById('asset-selector');
+    if (assetSelector) {
+        assetSelector.value = currentAsset;
+    }
 
     function switchAssetWithReload() {
         const selected = document.getElementById('asset-selector').value;
@@ -144,26 +151,31 @@
 
     const assetRegistry = {
         'CRYPTO_IDX': { isIdx: true, isForex: false },
-        'BTCUSDT': { streamSymbol: 'btcusdt', decimals: 2, isForex: false },
-        'ETHUSDT': { streamSymbol: 'ethusdt', decimals: 2, isForex: false },
-        'SOLUSDT': { streamSymbol: 'solusdt', decimals: 2, isForex: false }
+        'BTCUSDT': { streamSymbol: 'btcusdt', decimals: 2, isForex: false, label: 'BTC/USDT' },
+        'ETHUSDT': { streamSymbol: 'ethusdt', decimals: 2, isForex: false, label: 'ETH/USDT' },
+        'SOLUSDT': { streamSymbol: 'solusdt', decimals: 2, isForex: false, label: 'SOL/USDT' },
+        'LTCUSDT': { streamSymbol: 'ltcusdt', decimals: 2, isForex: false, label: 'LTC/USDT' },
+        'ZECUSDT': { streamSymbol: 'zecusdt', decimals: 2, isForex: false, label: 'ZEC/USDT' }
     };
 
     const config = assetRegistry[currentAsset] || assetRegistry['CRYPTO_IDX'];
 
     let latestDepthData = null;
-    let lockedSignalData = null; // Store locked signal
+    let lockedSignalData = null;
     let isLocked = false;
     let streamer = null;
 
+    // Connect Streamer Based on Asset Type
     if (config.isIdx && typeof CryptoIDXStreamer !== 'undefined') {
         document.getElementById('price').innerText = "4-ASSET INDEX";
+        document.getElementById('monitor-title').innerHTML = `<span class="pulse-dot"></span> CRYPTO IDX 4-ASSETS LIVE MONITOR`;
         streamer = new CryptoIDXStreamer((multiData) => {
             latestDepthData = multiData;
             renderOrderBookUI(multiData);
         });
         streamer.connect();
     } else {
+        document.getElementById('monitor-title').innerHTML = `<span class="pulse-dot"></span> ${config.label || currentAsset} REAL TRADES MONITOR`;
         streamer = new DataStreamer(
             config,
             (livePrice) => {
@@ -177,11 +189,15 @@
         streamer.start();
     }
 
+    // Render Orderbook / Trades according to the Selected Asset Only
     function renderOrderBookUI(data) {
         let bidsHtml = '';
         let asksHtml = '';
 
-        if (data && data.btc && data.eth && data.ltc && data.zec) {
+        if (!data) return;
+
+        // If Multi-Asset Composite Index (CRYPTO_IDX)
+        if (config.isIdx && data.btc && data.eth && data.ltc && data.zec) {
             const coins = [
                 { key: 'btc', label: 'BTC' },
                 { key: 'eth', label: 'ETH' },
@@ -199,21 +215,29 @@
                 bidsHtml += `<div class="book-row"><span class="bid-p">${item.label}: ${buyC}</span><span>$${buyV}</span></div>`;
                 asksHtml += `<div class="book-row"><span class="ask-p">${item.label}: ${sellC}</span><span>$${sellV}</span></div>`;
             });
-        } else if (data) {
-            bidsHtml = `<div class="book-row"><span class="bid-p">BUY TRADES: ${data.buyCount || 0}</span><span>$${Math.round(data.buyVol || 0)}</span></div>`;
-            asksHtml = `<div class="book-row"><span class="ask-p">SELL TRADES: ${data.sellCount || 0}</span><span>$${Math.round(data.sellVol || 0)}</span></div>`;
+        } 
+        // If Single Asset (e.g. BTC, ETH, SOL, etc.)
+        else {
+            const buyCount = data.buyCount || 0;
+            const sellCount = data.sellCount || 0;
+            const buyVol = Math.round(data.buyVol || 0);
+            const sellVol = Math.round(data.sellVol || 0);
+            const assetName = config.label || currentAsset;
+
+            bidsHtml = `<div class="book-row"><span class="bid-p">${assetName}: ${buyCount} Trades</span><span>$${buyVol}</span></div>`;
+            asksHtml = `<div class="book-row"><span class="ask-p">${assetName}: ${sellCount} Trades</span><span>$${sellVol}</span></div>`;
         }
 
         document.getElementById('bids-stream').innerHTML = bidsHtml;
         document.getElementById('asks-stream').innerHTML = asksHtml;
     }
 
-    // MAIN TIMING LOOP (Runs every 200ms for exact precision)
+    // MAIN TIMING LOOP (Executes continuously every 200ms)
     setInterval(() => {
         const now = new Date();
         const currentSec = now.getSeconds();
 
-        // Binomo Bidding Clock (59 down to 00)
+        // Binomo Bidding Clock Cycle (59s down to 00s)
         let binomoTimer = 59 - currentSec;
         if (binomoTimer < 0) binomoTimer = 0;
 
@@ -221,7 +245,7 @@
 
         if (!latestDepthData) return;
 
-        // Calculate live continuous score
+        // Compute Live Signal from Calculator File
         let liveCalc;
         if (config.isIdx && typeof CryptoIDXCalculator !== 'undefined') {
             liveCalc = CryptoIDXCalculator.compute(latestDepthData);
@@ -245,7 +269,7 @@
         // --- PHASE 2: SIGNAL LOCK & BIDDING WINDOW (30s to 01s) ---
         else {
             if (!isLocked) {
-                // Exact 30th Second par score lock hoga!
+                // LOCK SIGNAL AT 30TH SECOND EXACTLY
                 lockedSignalData = Object.assign({}, liveCalc);
                 isLocked = true;
             }
@@ -253,7 +277,7 @@
             document.getElementById('phase-text').innerText = '🔥 PHASE 2: SIGNAL LOCKED! PLACE TRADE ON BINOMO';
             document.getElementById('phase-text').style.color = '#0ecb81';
 
-            // Display LOCKED Call or Put Signal solid till 01s
+            // Display LOCKED Signal till 01s
             const sigText = lockedSignalData.signalText;
             const sigClass = lockedSignalData.sigClass;
             const cardClass = lockedSignalData.cardClass;
