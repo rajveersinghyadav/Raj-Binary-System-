@@ -138,7 +138,6 @@
     const urlParams = new URLSearchParams(window.location.search);
     let currentAsset = urlParams.get('asset') || 'CRYPTO_IDX';
     
-    // Ensure asset selector matches current asset
     const assetSelector = document.getElementById('asset-selector');
     if (assetSelector) {
         assetSelector.value = currentAsset;
@@ -165,7 +164,6 @@
     let isLocked = false;
     let streamer = null;
 
-    // Connect Streamer Based on Asset Type
     if (config.isIdx && typeof CryptoIDXStreamer !== 'undefined') {
         document.getElementById('price').innerText = "4-ASSET INDEX";
         document.getElementById('monitor-title').innerHTML = `<span class="pulse-dot"></span> CRYPTO IDX 4-ASSETS LIVE MONITOR`;
@@ -189,14 +187,12 @@
         streamer.start();
     }
 
-    // Render Orderbook / Trades according to the Selected Asset Only
     function renderOrderBookUI(data) {
         let bidsHtml = '';
         let asksHtml = '';
 
         if (!data) return;
 
-        // If Multi-Asset Composite Index (CRYPTO_IDX)
         if (config.isIdx && data.btc && data.eth && data.ltc && data.zec) {
             const coins = [
                 { key: 'btc', label: 'BTC' },
@@ -216,7 +212,6 @@
                 asksHtml += `<div class="book-row"><span class="ask-p">${item.label}: ${sellC}</span><span>$${sellV}</span></div>`;
             });
         } 
-        // If Single Asset (e.g. BTC, ETH, SOL, etc.)
         else {
             const buyCount = data.buyCount || 0;
             const sellCount = data.sellCount || 0;
@@ -232,20 +227,20 @@
         document.getElementById('asks-stream').innerHTML = asksHtml;
     }
 
-    // MAIN TIMING LOOP (Executes continuously every 200ms)
+    // PERFECT BINOMO SYNCHRONIZED TIMING LOOP
     setInterval(() => {
         const now = new Date();
         const currentSec = now.getSeconds();
 
-        // Binomo Bidding Clock Cycle (59s down to 00s)
-        let binomoTimer = 59 - currentSec;
-        if (binomoTimer < 0) binomoTimer = 0;
+        // Binomo Exact Bidding Clock: 59 down to 00
+        const binomoTimer = 59 - currentSec;
 
+        // Display Formatting (00:59 to 00:00)
         document.getElementById('timer').innerText = `00:${binomoTimer < 10 ? '0' : ''}${binomoTimer}`;
 
         if (!latestDepthData) return;
 
-        // Compute Live Signal from Calculator File
+        // Calculate Live Data
         let liveCalc;
         if (config.isIdx && typeof CryptoIDXCalculator !== 'undefined') {
             liveCalc = CryptoIDXCalculator.compute(latestDepthData);
@@ -255,37 +250,39 @@
             return;
         }
 
-        // --- PHASE 1: CALCULATION PHASE (59s to 31s) ---
+        // =========================================================
+        // PHASE 1: DATA CALCULATION PHASE (59s down to 31s)
+        // =========================================================
         if (binomoTimer >= 31) {
             isLocked = false;
             lockedSignalData = null;
 
-            document.getElementById('phase-text').innerText = '⏳ PHASE 1: CALCULATING SPEED (59s -> 30s)...';
+            document.getElementById('phase-text').innerText = '⏳ PHASE 1: CALCULATING REAL FLOW (59s ➔ 30s)...';
             document.getElementById('phase-text').style.color = '#f0b90b';
 
-            // Show LIVE accumulating stats without locking signal text
-            renderUI(liveCalc, "CALCULATING SPEED...", "WAITING", "", false);
+            // Real-time updating display (Without locking signal text)
+            renderUI(liveCalc, "ANALYZING BINOMO FLOW...", "WAITING", "", false);
         } 
-        // --- PHASE 2: SIGNAL LOCK & BIDDING WINDOW (30s to 01s) ---
+        // =========================================================
+        // PHASE 2: FINAL SIGNAL LOCK & ENTRY WINDOW (30s down to 00s)
+        // =========================================================
         else {
             if (!isLocked) {
-                // LOCK SIGNAL AT 30TH SECOND EXACTLY
-                lockedSignalData = Object.assign({}, liveCalc);
+                // EXACT 30th SECOND LOCK
+                lockedSignalData = JSON.parse(JSON.stringify(liveCalc));
                 isLocked = true;
             }
 
             document.getElementById('phase-text').innerText = '🔥 PHASE 2: SIGNAL LOCKED! PLACE TRADE ON BINOMO';
             document.getElementById('phase-text').style.color = '#0ecb81';
 
-            // Display LOCKED Signal till 01s
-            const sigText = lockedSignalData.signalText;
-            const sigClass = lockedSignalData.sigClass;
-            const cardClass = lockedSignalData.cardClass;
-
-            renderUI(lockedSignalData, sigText, sigClass, cardClass, true);
+            // Display Locked Data until 00s candle end
+            renderUI(lockedSignalData, lockedSignalData.signalText, lockedSignalData.sigClass, lockedSignalData.cardClass, true);
         }
 
-        // RESET TRADES AT 59s MARK FOR NEW CANDLE
+        // =========================================================
+        // CANDLE RESET POINT (Exact 59s / 00s Candle Change)
+        // =========================================================
         if (binomoTimer === 59) {
             if (streamer && streamer.resetTradeVolumes) streamer.resetTradeVolumes();
             if (streamer && streamer.resetTicks) streamer.resetTicks();
@@ -293,7 +290,6 @@
     }, 200);
 
     function renderUI(calc, signalText, sigClass, cardClass, isLockedPhase) {
-        // Main Signal Card Update
         const cardElem = document.getElementById('signal-card');
         cardElem.className = 'signal-card ' + (isLockedPhase ? cardClass : '');
 
@@ -303,7 +299,6 @@
 
         document.getElementById('confidence').innerText = (calc.confidence || 0) + '%';
 
-        // Aggression & Stats
         const aggElem = document.getElementById('agg-status');
         const aggRatio = calc.aggressionRatio || 0;
 
