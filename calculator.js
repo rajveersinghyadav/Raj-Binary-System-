@@ -15,6 +15,8 @@ class CryptoIDXCalculator {
         let totalWeightedSellCount = 0;
         let totalWeightedBuyVol = 0;
         let totalWeightedSellVol = 0;
+        let totalWeightedDepthBids = 0;
+        let totalWeightedDepthAsks = 0;
         let activeCoinsCount = 0;
 
         for (let coin in weights) {
@@ -23,59 +25,68 @@ class CryptoIDXCalculator {
             if (data && (data.buyCount > 0 || data.sellCount > 0)) {
                 activeCoinsCount++;
 
+                // Executed Trades Stats
                 totalWeightedBuyCount += (data.buyCount || 0) * weights[coin];
                 totalWeightedSellCount += (data.sellCount || 0) * weights[coin];
 
                 totalWeightedBuyVol += (data.buyVol || 0) * weights[coin];
                 totalWeightedSellVol += (data.sellVol || 0) * weights[coin];
+
+                // Order Book Depth Stats (if available in stream data)
+                totalWeightedDepthBids += (data.depthBids || data.buyVol || 0) * weights[coin];
+                totalWeightedDepthAsks += (data.depthAsks || data.sellVol || 0) * weights[coin];
             }
         }
 
         if (activeCoinsCount < 2) {
-            return this.getEmptyState("ACCUMULATING SPEED DATA...");
+            return this.getEmptyState("ACCUMULATING HYBRID DATA...");
         }
 
-        // 1. TRADER COUNT SPEED DELTA (-1.0 to +1.0)
+        // 1. EXECUTED TRADES SPEED & VOLUME SCORE (-1.0 to +1.0)
         const totalTradesCount = totalWeightedBuyCount + totalWeightedSellCount;
         const traderRatio = totalTradesCount > 0 ? (totalWeightedBuyCount - totalWeightedSellCount) / totalTradesCount : 0;
 
-        // 2. EXECUTED VOLUME DELTA (-1.0 to +1.0)
         const totalTradeVol = totalWeightedBuyVol + totalWeightedSellVol;
         const volumeRatio = totalTradeVol > 0 ? (totalWeightedBuyVol - totalWeightedSellVol) / totalTradeVol : 0;
 
-        // 3. COMBINED MOMENTUM SCORE (60% Speed + 40% Volume)
-        const compositeScore = (traderRatio * 0.60) + (volumeRatio * 0.40);
+        const executedMomentum = (traderRatio * 0.60) + (volumeRatio * 0.40);
+
+        // 2. ORDER BOOK DEPTH IMBALANCE SCORE (-1.0 to +1.0)
+        const totalDepth = totalWeightedDepthBids + totalWeightedDepthAsks;
+        const depthImbalance = totalDepth > 0 ? (totalWeightedDepthBids - totalWeightedDepthAsks) / totalDepth : 0;
+
+        // 3. MERGED HYBRID SCORE (60% Executed Tape + 40% Order Book Depth)
+        const hybridScore = (executedMomentum * 0.60) + (depthImbalance * 0.40);
 
         let signalText = "NEUTRAL / NO ENTRY";
         let sigClass = "WAITING";
         let cardClass = "";
         let confidence = 50;
 
-        const isStrongBuy = (compositeScore >= 0.15);
-        const isStrongSell = (compositeScore <= -0.15);
-
-        if (isStrongBuy) {
+        // Strict Filters for Strong Signal
+        if (hybridScore >= 0.12) {
             signalText = "NEXT CANDLE: CALL (BUY)";
             sigClass = "BUY";
             cardClass = "GREEN";
-            confidence = Math.min(99, Math.round(80 + (compositeScore * 35)));
-        } else if (isStrongSell) {
+            confidence = Math.min(99, Math.round(80 + (hybridScore * 40)));
+        } else if (hybridScore <= -0.12) {
             signalText = "NEXT CANDLE: PUT (SELL)";
             sigClass = "SELL";
             cardClass = "RED";
-            confidence = Math.min(99, Math.round(80 + (Math.abs(compositeScore) * 35)));
+            confidence = Math.min(99, Math.round(80 + (Math.abs(hybridScore) * 40)));
         }
 
         return {
             imbalance: traderRatio,
             aggressionRatio: volumeRatio,
-            compositeScore: compositeScore,
+            depthImbalance: depthImbalance,
+            compositeScore: hybridScore,
             totalBids: totalWeightedBuyCount,
             totalAsks: totalWeightedSellCount,
             buyVol: totalWeightedBuyVol,
             sellVol: totalWeightedSellVol,
-            buyerAggressive: compositeScore > 0.15,
-            sellerAggressive: compositeScore < -0.15,
+            buyerAggressive: hybridScore >= 0.12,
+            sellerAggressive: hybridScore <= -0.12,
             signalText: signalText,
             confidence: confidence,
             sigClass: sigClass,
@@ -97,58 +108,6 @@ class CryptoIDXCalculator {
             imbalance: 0,
             totalBids: 0,
             totalAsks: 0
-        };
-    }
-}
-
-class SignalCalculator {
-    static compute(data, isForex) {
-        if (!data) return CryptoIDXCalculator.getEmptyState("NO TRADE STREAM");
-
-        const buyCount = data.buyCount || 0;
-        const sellCount = data.sellCount || 0;
-        const buyVol = data.buyVol || 0;
-        const sellVol = data.sellVol || 0;
-
-        const totalTrades = buyCount + sellCount;
-        const traderRatio = totalTrades > 0 ? (buyCount - sellCount) / totalTrades : 0;
-
-        const totalVol = buyVol + sellVol;
-        const volRatio = totalVol > 0 ? (buyVol - sellVol) / totalVol : 0;
-
-        const score = (traderRatio * 0.6) + (volRatio * 0.4);
-
-        let signalText = "NEUTRAL / NO ENTRY";
-        let sigClass = "WAITING";
-        let cardClass = "";
-        let confidence = 50;
-
-        if (score >= 0.15) {
-            signalText = "NEXT CANDLE: CALL (BUY)";
-            sigClass = "BUY";
-            cardClass = "GREEN";
-            confidence = Math.min(99, Math.round(80 + (score * 35)));
-        } else if (score <= -0.15) {
-            signalText = "NEXT CANDLE: PUT (SELL)";
-            sigClass = "SELL";
-            cardClass = "RED";
-            confidence = Math.min(99, Math.round(80 + (Math.abs(score) * 35)));
-        }
-
-        return {
-            imbalance: traderRatio,
-            aggressionRatio: volRatio,
-            compositeScore: score,
-            totalBids: buyCount,
-            totalAsks: sellCount,
-            buyVol: buyVol,
-            sellVol: sellVol,
-            buyerAggressive: score > 0.15,
-            sellerAggressive: score < -0.15,
-            signalText: signalText,
-            confidence: confidence,
-            sigClass: sigClass,
-            cardClass: cardClass
         };
     }
 }
