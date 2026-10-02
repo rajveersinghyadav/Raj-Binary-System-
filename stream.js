@@ -2,20 +2,21 @@ class CryptoIDXStreamer {
     constructor(onUpdate) {
         this.onUpdate = onUpdate;
         this.streamsData = {
-            btc: { bids: [], asks: [], buyVol: 0, sellVol: 0 },
-            eth: { bids: [], asks: [], buyVol: 0, sellVol: 0 },
-            ltc: { bids: [], asks: [], buyVol: 0, sellVol: 0 },
-            zec: { bids: [], asks: [], buyVol: 0, sellVol: 0 }
+            btc: { buyCount: 0, sellCount: 0, buyVol: 0, sellVol: 0, price: 0 },
+            eth: { buyCount: 0, sellCount: 0, buyVol: 0, sellVol: 0, price: 0 },
+            ltc: { buyCount: 0, sellCount: 0, buyVol: 0, sellVol: 0, price: 0 },
+            zec: { buyCount: 0, sellCount: 0, buyVol: 0, sellVol: 0, price: 0 }
         };
         this.ws = null;
     }
 
     connect() {
+        // Pure Real Executed Trades Stream (@aggTrade)
         const streams = [
-            "btcusdt@depth5@100ms", "btcusdt@trade",
-            "ethusdt@depth5@100ms", "ethusdt@trade",
-            "ltcusdt@depth5@100ms", "ltcusdt@trade",
-            "zecusdt@depth5@100ms", "zecusdt@trade"
+            "btcusdt@aggTrade",
+            "ethusdt@aggTrade",
+            "ltcusdt@aggTrade",
+            "zecusdt@aggTrade"
         ].join("/");
 
         const url = `wss://stream.binance.com:9443/stream?streams=${streams}`;
@@ -37,19 +38,21 @@ class CryptoIDXStreamer {
 
                 if (!coin) return;
 
-                if (s.includes("@depth")) {
-                    this.streamsData[coin].bids = d.bids || [];
-                    this.streamsData[coin].asks = d.asks || [];
-                } else if (s.includes("@trade")) {
-                    const qty = parseFloat(d.q || 0);
-                    const price = parseFloat(d.p || 1);
-                    const val = qty * price;
+                // REAL EXECUTED TRADE DATA PROCESSING
+                const qty = parseFloat(d.q || 0);
+                const price = parseFloat(d.p || 0);
+                const val = qty * price;
 
-                    if (d.m) {
-                        this.streamsData[coin].sellVol += val;
-                    } else {
-                        this.streamsData[coin].buyVol += val;
-                    }
+                this.streamsData[coin].price = price;
+
+                // d.m = true means Buyer was Passive and Seller hit the Bid (SELLER TRADE)
+                // d.m = false means Seller was Passive and Buyer hit the Ask (BUYER TRADE)
+                if (d.m) {
+                    this.streamsData[coin].sellCount += 1;
+                    this.streamsData[coin].sellVol += val;
+                } else {
+                    this.streamsData[coin].buyCount += 1;
+                    this.streamsData[coin].buyVol += val;
                 }
 
                 if (this.onUpdate) {
@@ -66,6 +69,8 @@ class CryptoIDXStreamer {
 
     resetTradeVolumes() {
         for (let coin in this.streamsData) {
+            this.streamsData[coin].buyCount = 0;
+            this.streamsData[coin].sellCount = 0;
             this.streamsData[coin].buyVol = 0;
             this.streamsData[coin].sellVol = 0;
         }
@@ -78,9 +83,11 @@ class DataStreamer {
         this.onPrice = onPrice;
         this.onDepth = onDepth;
         this.ws = null;
+        this.buyCount = 0;
+        this.sellCount = 0;
         this.buyVol = 0;
         this.sellVol = 0;
-        this.depthData = { bids: [], asks: [], buyVol: 0, sellVol: 0 };
+        this.depthData = { buyCount: 0, sellCount: 0, buyVol: 0, sellVol: 0, price: 0 };
     }
 
     start() {
@@ -90,25 +97,34 @@ class DataStreamer {
         }
 
         const symbol = (this.config.streamSymbol || 'btcusdt').toLowerCase();
-        const url = `wss://stream.binance.com:9443/ws/${symbol}@depth10@100ms/${symbol}@trade`;
+        const url = `wss://stream.binance.com:9443/ws/${symbol}@aggTrade`;
 
         this.ws = new WebSocket(url);
 
         this.ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
-            if (data.bids && data.asks) {
-                this.depthData.bids = data.bids;
-                this.depthData.asks = data.asks;
-                if (data.bids[0]) this.onPrice(parseFloat(data.bids[0][0]));
-            } else if (data.e === 'trade') {
-                const qty = parseFloat(data.q) * parseFloat(data.p || 1);
-                if (data.m) this.sellVol += qty;
-                else this.buyVol += qty;
-            }
+            if (data.e === 'aggTrade') {
+                const price = parseFloat(data.p || 0);
+                const qty = parseFloat(data.q || 0) * price;
+                
+                this.onPrice(price);
+                this.depthData.price = price;
 
-            this.depthData.buyVol = this.buyVol;
-            this.depthData.sellVol = this.sellVol;
-            this.onDepth(this.depthData);
+                if (data.m) {
+                    this.sellCount += 1;
+                    this.sellVol += qty;
+                } else {
+                    this.buyCount += 1;
+                    this.buyVol += qty;
+                }
+
+                this.depthData.buyCount = this.buyCount;
+                this.depthData.sellCount = this.sellCount;
+                this.depthData.buyVol = this.buyVol;
+                this.depthData.sellVol = this.sellVol;
+
+                this.onDepth(this.depthData);
+            }
         };
 
         this.ws.onerror = () => setTimeout(() => this.start(), 2000);
@@ -119,15 +135,18 @@ class DataStreamer {
         const mockPrice = 1.0850;
         this.onPrice(mockPrice);
         this.depthData = {
-            bids: [[mockPrice - 0.0001, 100]],
-            asks: [[mockPrice + 0.0001, 100]],
-            buyVol: 50,
-            sellVol: 50
+            buyCount: 50,
+            sellCount: 50,
+            buyVol: 500,
+            sellVol: 500,
+            price: mockPrice
         };
         this.onDepth(this.depthData);
     }
 
     resetTicks() {
+        this.buyCount = 0;
+        this.sellCount = 0;
         this.buyVol = 0;
         this.sellVol = 0;
     }
