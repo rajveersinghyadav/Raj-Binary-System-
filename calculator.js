@@ -4,7 +4,6 @@ class CryptoIDXCalculator {
             return this.getEmptyState("WAITING STREAM DATA");
         }
 
-        // Binomo Crypto IDX Weightage
         const weights = {
             btc: 0.40,
             eth: 0.30,
@@ -33,51 +32,50 @@ class CryptoIDXCalculator {
         }
 
         if (activeCoinsCount < 2) {
-            return this.getEmptyState("ANALYZING LIVE TRADERS COUNT...");
+            return this.getEmptyState("ACCUMULATING SPEED DATA...");
         }
 
-        // 1. TRADERS COUNT RATIO (-1.0 to +1.0)
+        // 1. TRADER COUNT SPEED DELTA (-1.0 to +1.0)
         const totalTradesCount = totalWeightedBuyCount + totalWeightedSellCount;
         const traderRatio = totalTradesCount > 0 ? (totalWeightedBuyCount - totalWeightedSellCount) / totalTradesCount : 0;
 
-        // 2. EXECUTED VOLUME AGGRESSION RATIO (-1.0 to +1.0)
+        // 2. EXECUTED VOLUME DELTA (-1.0 to +1.0)
         const totalTradeVol = totalWeightedBuyVol + totalWeightedSellVol;
         const volumeRatio = totalTradeVol > 0 ? (totalWeightedBuyVol - totalWeightedSellVol) / totalTradeVol : 0;
 
-        // 3. COMBO SCORE (60% Traders Count + 40% Executed Volume)
+        // 3. COMBINED MOMENTUM SCORE (60% Speed + 40% Volume)
         const compositeScore = (traderRatio * 0.60) + (volumeRatio * 0.40);
 
-        let signalText = "NEUTRAL / NO HIGH-CONFIDENCE ENTRY";
+        let signalText = "NEUTRAL / NO ENTRY";
         let sigClass = "WAITING";
         let cardClass = "";
         let confidence = 50;
 
-        // HIGH CONFIDENCE THRESHOLDS (>= 60% Trader Dominance)
-        const isStrongBuy = (compositeScore >= 0.20) && (traderRatio >= 0.15);
-        const isStrongSell = (compositeScore <= -0.20) && (traderRatio <= -0.15);
+        const isStrongBuy = (compositeScore >= 0.15);
+        const isStrongSell = (compositeScore <= -0.15);
 
         if (isStrongBuy) {
-            signalText = "NEXT CANDLE: ULTRA CALL (BUYERS DOMINANT)";
+            signalText = "NEXT CANDLE: CALL (BUY)";
             sigClass = "BUY";
             cardClass = "GREEN";
-            confidence = Math.min(99, Math.round(80 + (compositeScore * 30)));
+            confidence = Math.min(99, Math.round(80 + (compositeScore * 35)));
         } else if (isStrongSell) {
-            signalText = "NEXT CANDLE: ULTRA PUT (SELLERS DOMINANT)";
+            signalText = "NEXT CANDLE: PUT (SELL)";
             sigClass = "SELL";
             cardClass = "RED";
-            confidence = Math.min(99, Math.round(80 + (Math.abs(compositeScore) * 30)));
+            confidence = Math.min(99, Math.round(80 + (Math.abs(compositeScore) * 35)));
         }
 
         return {
-            imbalance: traderRatio, // Mapping trader ratio to UI
+            imbalance: traderRatio,
             aggressionRatio: volumeRatio,
             compositeScore: compositeScore,
-            totalBids: totalWeightedBuyCount, // Bids slot repurposed for Buy Trades Count
-            totalAsks: totalWeightedSellCount, // Asks slot repurposed for Sell Trades Count
+            totalBids: totalWeightedBuyCount,
+            totalAsks: totalWeightedSellCount,
             buyVol: totalWeightedBuyVol,
             sellVol: totalWeightedSellVol,
-            buyerAggressive: traderRatio > 0.15,
-            sellerAggressive: traderRatio < -0.15,
+            buyerAggressive: compositeScore > 0.15,
+            sellerAggressive: compositeScore < -0.15,
             signalText: signalText,
             confidence: confidence,
             sigClass: sigClass,
@@ -120,21 +118,21 @@ class SignalCalculator {
 
         const score = (traderRatio * 0.6) + (volRatio * 0.4);
 
-        let signalText = "WAITING FOR TRADES...";
+        let signalText = "NEUTRAL / NO ENTRY";
         let sigClass = "WAITING";
         let cardClass = "";
         let confidence = 50;
 
-        if (score >= 0.20) {
+        if (score >= 0.15) {
             signalText = "NEXT CANDLE: CALL (BUY)";
             sigClass = "BUY";
             cardClass = "GREEN";
-            confidence = Math.min(99, Math.round(80 + (score * 30)));
-        } else if (score <= -0.20) {
+            confidence = Math.min(99, Math.round(80 + (score * 35)));
+        } else if (score <= -0.15) {
             signalText = "NEXT CANDLE: PUT (SELL)";
             sigClass = "SELL";
             cardClass = "RED";
-            confidence = Math.min(99, Math.round(80 + (Math.abs(score) * 30)));
+            confidence = Math.min(99, Math.round(80 + (Math.abs(score) * 35)));
         }
 
         return {
