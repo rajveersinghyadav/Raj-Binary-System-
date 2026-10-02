@@ -18,14 +18,14 @@
         .price { font-size: 28px; font-weight: bold; text-align: center; margin: 2px 0 10px 0; color: #f0b90b; }
 
         .timer-box { background: #222630; border-radius: 8px; padding: 10px; text-align: center; margin-bottom: 10px; }
-        .timer-val { font-size: 22px; font-weight: bold; color: #f0b90b; }
-        .phase-text { font-size: 11px; margin-top: 2px; font-weight: 600; }
+        .timer-val { font-size: 24px; font-weight: bold; color: #f0b90b; }
+        .phase-text { font-size: 11px; margin-top: 4px; font-weight: 700; }
 
-        .signal-card { background: #2b313a; border-radius: 12px; padding: 12px; text-align: center; border: 2px solid transparent; transition: all 0.3s; margin-bottom: 10px; }
-        .signal-card.GREEN { border-color: #0ecb81; background: rgba(14, 203, 129, 0.15); }
-        .signal-card.RED { border-color: #f6465d; background: rgba(246, 70, 93, 0.15); }
+        .signal-card { background: #2b313a; border-radius: 12px; padding: 14px; text-align: center; border: 2px solid #363c4e; transition: all 0.3s; margin-bottom: 10px; }
+        .signal-card.GREEN { border-color: #0ecb81; background: rgba(14, 203, 129, 0.18); box-shadow: 0 0 15px rgba(14, 203, 129, 0.3); }
+        .signal-card.RED { border-color: #f6465d; background: rgba(246, 70, 93, 0.18); box-shadow: 0 0 15px rgba(246, 70, 93, 0.3); }
         
-        .signal-type { font-size: 18px; font-weight: 800; margin: 4px 0; }
+        .signal-type { font-size: 20px; font-weight: 900; margin: 6px 0; letter-spacing: 0.5px; }
         .BUY { color: #0ecb81; }
         .SELL { color: #f6465d; }
         .WAITING { color: #848e9c; }
@@ -64,30 +64,23 @@
             <option value="ETHUSDT">Ethereum (ETH/USDT)</option>
             <option value="SOLUSDT">Solana (SOL/USDT)</option>
         </optgroup>
-        <optgroup label="Forex Pairs">
-            <option value="EURUSD">EUR / USD</option>
-            <option value="AUDCAD">AUD / CAD</option>
-            <option value="AUDCHF">AUD / CHF</option>
-            <option value="AUDJPY">AUD / JPY</option>
-            <option value="AUDUSD">AUD / USD</option>
-        </optgroup>
     </select>
 
     <div class="badges">
         <span id="stream-status" class="badge on">REAL EXECUTED TRADES STREAM LIVE</span>
     </div>
 
-    <div id="price" class="price">CONNECTING...</div>
+    <div id="price" class="price">4-ASSET INDEX</div>
 
     <div class="timer-box">
         <div>Clock: <span id="timer" class="timer-val">00:59</span></div>
-        <div id="phase-text" class="phase-text" style="color:#f0b90b;">Accumulating Executed Trades & Volume...</div>
+        <div id="phase-text" class="phase-text" style="color:#f0b90b;">Accumulating Live Trades...</div>
     </div>
 
     <!-- MAIN SIGNAL CARD -->
     <div id="signal-card" class="signal-card">
-        <div style="font-size: 10px; font-weight: bold; color:#848e9c; text-transform:uppercase;">SIGNAL WINDOW (30s - 01s)</div>
-        <div id="signal" class="signal-type WAITING">CALCULATING (59s to 30s)...</div>
+        <div style="font-size: 10px; font-weight: bold; color:#848e9c; text-transform:uppercase;">BIDDING WINDOW SIGNAL (30s - 01s)</div>
+        <div id="signal" class="signal-type WAITING">CALCULATING...</div>
         <div>Confidence: <b id="confidence" style="color:#fff;">0%</b></div>
     </div>
 
@@ -142,7 +135,6 @@
 <script>
     const urlParams = new URLSearchParams(window.location.search);
     let currentAsset = urlParams.get('asset') || 'CRYPTO_IDX';
-    
     document.getElementById('asset-selector').value = currentAsset;
 
     function switchAssetWithReload() {
@@ -154,18 +146,14 @@
         'CRYPTO_IDX': { isIdx: true, isForex: false },
         'BTCUSDT': { streamSymbol: 'btcusdt', decimals: 2, isForex: false },
         'ETHUSDT': { streamSymbol: 'ethusdt', decimals: 2, isForex: false },
-        'SOLUSDT': { streamSymbol: 'solusdt', decimals: 2, isForex: false },
-        'EURUSD': { streamSymbol: 'eurusdt', decimals: 5, isForex: true },
-        'AUDCAD': { streamSymbol: 'audusdt', decimals: 5, isForex: true },
-        'AUDCHF': { streamSymbol: 'audusdt', decimals: 5, isForex: true },
-        'AUDJPY': { streamSymbol: 'audusdt', decimals: 3, isForex: true },
-        'AUDUSD': { streamSymbol: 'audusdt', decimals: 5, isForex: true }
+        'SOLUSDT': { streamSymbol: 'solusdt', decimals: 2, isForex: false }
     };
 
     const config = assetRegistry[currentAsset] || assetRegistry['CRYPTO_IDX'];
 
     let latestDepthData = null;
-    let lockedSignal = null;
+    let lockedSignalData = null; // Store locked signal
+    let isLocked = false;
     let streamer = null;
 
     if (config.isIdx && typeof CryptoIDXStreamer !== 'undefined') {
@@ -220,16 +208,20 @@
         document.getElementById('asks-stream').innerHTML = asksHtml;
     }
 
-    // MAIN TIMING CYCLE: 59s to 30s (Calculation) | 30s to 01s (Bidding & Lock)
+    // MAIN TIMING LOOP (Runs every 200ms for exact precision)
     setInterval(() => {
-        const seconds = new Date().getSeconds();
-        const remainingSeconds = 59 - seconds;
+        const now = new Date();
+        const currentSec = now.getSeconds();
 
-        document.getElementById('timer').innerText = `00:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+        // Binomo Bidding Clock (59 down to 00)
+        let binomoTimer = 59 - currentSec;
+        if (binomoTimer < 0) binomoTimer = 0;
+
+        document.getElementById('timer').innerText = `00:${binomoTimer < 10 ? '0' : ''}${binomoTimer}`;
 
         if (!latestDepthData) return;
 
-        // Background Calculation
+        // Calculate live continuous score
         let liveCalc;
         if (config.isIdx && typeof CryptoIDXCalculator !== 'undefined') {
             liveCalc = CryptoIDXCalculator.compute(latestDepthData);
@@ -239,51 +231,62 @@
             return;
         }
 
-        // PHASE 1: CALCULATION PHASE (59s to 31s)
-        if (remainingSeconds >= 31) {
-            lockedSignal = null; // Clear lock
-            document.getElementById('phase-text').innerText = '⏳ PHASE 1: ACCUMULATING SPEED (59s -> 30s)';
+        // --- PHASE 1: CALCULATION PHASE (59s to 31s) ---
+        if (binomoTimer >= 31) {
+            isLocked = false;
+            lockedSignalData = null;
+
+            document.getElementById('phase-text').innerText = '⏳ PHASE 1: CALCULATING SPEED (59s -> 30s)...';
             document.getElementById('phase-text').style.color = '#f0b90b';
 
-            renderSignalUI(liveCalc, "CALCULATING SPEED & PRESSURE...", true);
+            // Show LIVE accumulating stats without locking signal text
+            renderUI(liveCalc, "CALCULATING SPEED...", "WAITING", "", false);
         } 
-        // PHASE 2: SIGNAL LOCK & BIDDING WINDOW (30s to 01s)
+        // --- PHASE 2: SIGNAL LOCK & BIDDING WINDOW (30s to 01s) ---
         else {
-            if (!lockedSignal) {
-                lockedSignal = liveCalc; // LOCK SIGNAL EXACTLY AT 30s
+            if (!isLocked) {
+                // Exact 30th Second par score lock hoga!
+                lockedSignalData = Object.assign({}, liveCalc);
+                isLocked = true;
             }
-            document.getElementById('phase-text').innerText = '🔥 PHASE 2: SIGNAL LOCKED (BIDDING WINDOW ACTIVE)';
+
+            document.getElementById('phase-text').innerText = '🔥 PHASE 2: SIGNAL LOCKED! PLACE TRADE ON BINOMO';
             document.getElementById('phase-text').style.color = '#0ecb81';
 
-            renderSignalUI(lockedSignal, lockedSignal.signalText, false);
+            // Display LOCKED Call or Put Signal solid till 01s
+            const sigText = lockedSignalData.signalText;
+            const sigClass = lockedSignalData.sigClass;
+            const cardClass = lockedSignalData.cardClass;
+
+            renderUI(lockedSignalData, sigText, sigClass, cardClass, true);
         }
 
-        // RESET COUNTERS AT CANDLE START (59s mark)
-        if (remainingSeconds === 59) {
-            if (streamer && streamer.resetTradeVolumes) {
-                streamer.resetTradeVolumes();
-            } else if (streamer && streamer.resetTicks) {
-                streamer.resetTicks();
-            }
+        // RESET TRADES AT 59s MARK FOR NEW CANDLE
+        if (binomoTimer === 59) {
+            if (streamer && streamer.resetTradeVolumes) streamer.resetTradeVolumes();
+            if (streamer && streamer.resetTicks) streamer.resetTicks();
         }
-    }, 1000);
+    }, 200);
 
-    function renderSignalUI(calc, signalDisplayText, isCalculating) {
-        document.getElementById('signal-card').className = 'signal-card ' + (isCalculating ? '' : (calc.cardClass || ''));
+    function renderUI(calc, signalText, sigClass, cardClass, isLockedPhase) {
+        // Main Signal Card Update
+        const cardElem = document.getElementById('signal-card');
+        cardElem.className = 'signal-card ' + (isLockedPhase ? cardClass : '');
 
         const sigElem = document.getElementById('signal');
-        sigElem.innerText = signalDisplayText;
-        sigElem.className = 'signal-type ' + (isCalculating ? 'WAITING' : (calc.sigClass || 'WAITING'));
+        sigElem.innerText = signalText;
+        sigElem.className = 'signal-type ' + (isLockedPhase ? sigClass : 'WAITING');
 
-        document.getElementById('confidence').innerText = isCalculating ? '0%' : ((calc.confidence || 0) + '%');
+        document.getElementById('confidence').innerText = (calc.confidence || 0) + '%';
 
+        // Aggression & Stats
         const aggElem = document.getElementById('agg-status');
-        const aggRatio = calc.aggressionRatio !== undefined ? calc.aggressionRatio : 0;
+        const aggRatio = calc.aggressionRatio || 0;
 
-        if (calc.buyerAggressive || aggRatio > 0.15) {
+        if (calc.buyerAggressive) {
             aggElem.innerText = "BUYERS SPEED HIGH 🔥";
             aggElem.style.color = "#0ecb81";
-        } else if (calc.sellerAggressive || aggRatio < -0.15) {
+        } else if (calc.sellerAggressive) {
             aggElem.innerText = "SELLERS SPEED HIGH ⚡";
             aggElem.style.color = "#f6465d";
         } else {
@@ -299,7 +302,7 @@
         document.getElementById('agg-buy-bar').style.width = aggPct + '%';
         document.getElementById('agg-sell-bar').style.width = (100 - aggPct) + '%';
 
-        const imbVal = calc.imbalance !== undefined ? calc.imbalance : 0;
+        const imbVal = calc.imbalance || 0;
         document.getElementById('imbalance-val').innerText = typeof imbVal === 'number' ? imbVal.toFixed(3) : imbVal;
 
         document.getElementById('total-bids').innerText = Math.round(calc.totalBids || 0);
