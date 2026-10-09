@@ -1,8 +1,6 @@
-fastapi
-uvicorn
-websockets
-requests
+streamlit
+yfinance
 pandas
-ta
-jinja2
-
+numpy
+plotly
+pandas_ta
